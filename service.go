@@ -7,6 +7,11 @@ import (
 	"github.com/pkg/errors"
 )
 
+var (
+	// ErrCanceled is used when the request cannot be satisfied on time
+	ErrCanceled = errors.New("timeout or canceled")
+)
+
 // Service is an interface that implements all the APIs.
 type Service interface {
 	Hosts(ctx context.Context, tag string) ([]Host, error)
@@ -48,7 +53,7 @@ func (s service) Hosts(ctx context.Context, tag string) ([]Host, error) {
 			return nil, errors.Wrap(out.err, "error retrieving build host IPs")
 		}
 	case <-ctx.Done():
-		return nil, errors.New("timeout or canceled")
+		return nil, ErrCanceled
 	}
 
 	result := make([]Host, len(ips))

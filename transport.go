@@ -26,9 +26,9 @@ func MakeHTTPHandler(s Service, logger log.Logger) http.Handler {
 		httptransport.ServerErrorEncoder(encodeError),
 	}
 
-	// GET     /hosts/:tag    retrieves the given hosts by tag
+	// GET     /hosts/:tag    retrieves the distcc hosts by tag
 
-	r.Methods("GET").Path("/hosts/{tag}").Handler(httptransport.NewServer(
+	r.Methods("GET").Path("/v1/hosts/{tag}").Handler(httptransport.NewServer(
 		e.GetHostsEndpoint,
 		decodeGetHostsRequest,
 		encodeResponse,
