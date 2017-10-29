@@ -72,15 +72,12 @@ func encodeError(_ context.Context, err error, w http.ResponseWriter) {
 }
 
 func codeFrom(err error) int {
-	// switch err {
-	// case ErrNotFound:
-	// 	return http.StatusNotFound
-	// case ErrAlreadyExists, ErrInconsistentIDs:
-	// 	return http.StatusBadRequest
-	// default:
-	// 	return http.StatusInternalServerError
-	// }
-	return http.StatusInternalServerError
+	switch err {
+	case ErrCanceled:
+		return http.StatusRequestTimeout
+	default:
+		return http.StatusInternalServerError
+	}
 }
 
 func decodeGetHostsRequest(_ context.Context, r *http.Request) (request interface{}, err error) {

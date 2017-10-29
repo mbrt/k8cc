@@ -1,19 +1,31 @@
 package k8cc
 
 import (
+	"context"
+	"fmt"
 	"net"
 
 	"github.com/pkg/errors"
+	"golang.org/x/time/rate"
+	k8errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
 
+var (
+	maxRetries = 10
+)
+
 // Deployer handles changing and querying kubernetes deployments
 type Deployer interface {
 	// PodIPs returns the IPs of the Pods running with a certain tag
 	PodIPs(tag string) ([]net.IP, error)
+	// Scale scales the deployment to the given replica count
+	Scale(ctx context.Context, tag string, replicas uint) error
+	// DeploymentName returns the name of the deployment that serves the given tag.
+	DeploymentName(tag string) string
 }
 
 // NewKubeDeployer creates a Deployer able to talk to an in cluster Kubernetes deployer
@@ -51,5 +63,71 @@ func (d inClusterDeployer) PodIPs(tag string) ([]net.IP, error) {
 			result = append(result, ip)
 		}
 	}
+
 	return result, nil
+}
+
+func (d inClusterDeployer) Scale(ctx context.Context, tag string, replicas uint) error {
+	deploymentsClient := d.clientset.AppsV1beta2().Deployments(d.namespace)
+	deployName := d.DeploymentName(tag)
+
+	deploy, err := deploymentsClient.Get(deployName, metav1.GetOptions{})
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("cannot get deployment for tag %s", tag))
+	}
+	if deploy.Status.Replicas == int32(replicas) {
+		// no need to update
+		return nil
+	}
+
+	//    You have two options to Update() this Deployment:
+	//
+	//    1. Modify the "deployment" variable and call: Update(deployment).
+	//       This works like the "kubectl replace" command and it overwrites/loses changes
+	//       made by other clients between you Create() and Update() the object.
+	//    2. Modify the "result" returned by Create()/Get() and retry Update(result) until
+	//       you no longer get a conflict error. This way, you can preserve changes made
+	//       by other clients between Create() and Update(). This is implemented below:
+
+	limiter := rate.NewLimiter(3.0, 2)
+	retries := 0
+	for {
+		deploy.Spec.Replicas = int32Ptr(replicas)
+
+		if _, err := deploymentsClient.Update(deploy); k8errors.IsConflict(err) {
+			// Deployment is modified in the meanwhile, query the latest version
+			// and modify the retrieved object.
+			fmt.Println("encountered conflict, retrying")
+			deploy, err = deploymentsClient.Get(deployName, metav1.GetOptions{})
+			if err != nil {
+				return errors.Wrap(err, fmt.Sprintf("get now failed for tag %s", tag))
+			}
+		} else if err != nil {
+			return errors.Wrap(err, fmt.Sprintf("deploy update failed for tag %s", tag))
+		} else {
+			break
+		}
+
+		// Sleep here with an exponential backoff to avoid
+		// exhausting the apiserver, and add a limit/timeout on the retries to
+		// avoid getting stuck in this loop indefintiely.
+		retries++
+		if retries > maxRetries {
+			return errors.New("cannot update deployment; max retries reached")
+		}
+		if err := limiter.Wait(ctx); err != nil {
+			return errors.Wrap(err, "context expired while updating deployment")
+		}
+	}
+
+	return nil
+}
+
+func (d inClusterDeployer) DeploymentName(tag string) string {
+	return fmt.Sprintf("deploy-%s", tag)
+}
+
+func int32Ptr(u uint) *int32 {
+	i := int32(u)
+	return &i
 }

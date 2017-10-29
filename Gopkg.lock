@@ -196,7 +196,7 @@
 [[projects]]
   branch = "master"
   name = "golang.org/x/net"
-  packages = ["http2","http2/hpack","idna","lex/httplex"]
+  packages = ["context","http2","http2/hpack","idna","lex/httplex"]
   revision = "c73622c77280266305273cb545f54516ced95b93"
 
 [[projects]]
@@ -204,6 +204,12 @@
   name = "golang.org/x/text"
   packages = ["collate","collate/build","internal/colltab","internal/gen","internal/tag","internal/triegen","internal/ucd","language","secure/bidirule","transform","unicode/bidi","unicode/cldr","unicode/norm","unicode/rangetable","width"]
   revision = "6eab0e8f74e86c598ec3b6fad4888e0c11482d48"
+
+[[projects]]
+  branch = "master"
+  name = "golang.org/x/time"
+  packages = ["rate"]
+  revision = "6dc17368e09b0e8634d71cac8168d853e869a0c7"
 
 [[projects]]
   name = "gopkg.in/inf.v0"
@@ -244,6 +250,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "51ab3f9f31c164c31316b9758da9a293f99605ccf70674c6df35affc91413950"
+  inputs-digest = "aaf78083c2eb5af214cf02334e4a04363e9df8bc72f561b2ed34920e15a514aa"
   solver-name = "gps-cdcl"
   solver-version = 1
