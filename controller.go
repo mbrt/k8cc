@@ -1,13 +1,74 @@
 package k8cc
 
 import (
+	"context"
 	"time"
+
+	"github.com/go-kit/kit/log"
 )
+
+// Controller manages the scaling of all the controlled deployments
+type Controller struct {
+	tagControllers map[string]*TagController
+	clock          Clock
+	leaseTime      time.Duration
+	autoscaleOpts  AutoScaleOptions
+	deployer       Deployer
+}
+
+// DoMaintenance takes care of scaling the deployments based on the active users
+func (c *Controller) DoMaintenance(ctx context.Context, logger log.Logger) {
+	for tag, tc := range c.tagControllers {
+		ndeploy, err := tc.DoMaintenance(ctx)
+		if err != nil {
+			_ = logger.Log("tag", tag, "err", err)
+		} else {
+			_ = logger.Log("tag", tag, "deployments", ndeploy)
+		}
+	}
+
+}
+
+// LeaseUser gives the given user another lease for the given tag
+func (c *Controller) LeaseUser(user, tag string) {
+	tc := c.getOrMakeTagController(tag)
+	tc.LeaseUser(user)
+}
+
+func (c *Controller) getOrMakeTagController(tag string) *TagController {
+	_, ok := c.tagControllers[tag]
+	if !ok {
+		new := TagController{
+			NewUserAccessController(c.leaseTime, c.clock),
+			NewAutoScaler(c.autoscaleOpts, tag, c.deployer),
+		}
+		c.tagControllers[tag] = &new
+	}
+	return c.tagControllers[tag]
+}
+
+// TagController manages the scaling of a single tag
+type TagController struct {
+	uac    UserAccessController
+	scaler AutoScaler
+}
+
+// LeaseUser resets the timer for the user and gives them another lease
+func (c *TagController) LeaseUser(user string) {
+	c.uac.LeaseUser(user)
+}
+
+// DoMaintenance does the deployment scaling based on the number of active users for the tag
+func (c *TagController) DoMaintenance(ctx context.Context) (uint, error) {
+	nactive := c.uac.ActiveUsers()
+	return c.scaler.UpdateUsers(ctx, nactive)
+}
 
 // UserAccessController manages the state of the users' leases for a deployment
 type UserAccessController struct {
-	leaseTime  time.Duration
-	clock      Clock
+	leaseTime time.Duration
+	clock     Clock
+	// maps a user to a lease time
 	userLeases map[string]time.Time
 }
 

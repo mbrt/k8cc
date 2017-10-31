@@ -16,8 +16,8 @@ type AutoScaleOptions struct {
 	ReplicasPerUser uint
 }
 
-// MakeAutoScaler creates a default autoscaler with the given options
-func MakeAutoScaler(opts AutoScaleOptions, tag string, d Deployer) AutoScaler {
+// NewAutoScaler creates a default autoscaler with the given options
+func NewAutoScaler(opts AutoScaleOptions, tag string, d Deployer) AutoScaler {
 	return AutoScaler{opts, tag, d}
 }
 
