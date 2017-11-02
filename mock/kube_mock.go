@@ -60,7 +60,7 @@ func (mr *MockDeployerMockRecorder) PodIPs(arg0 interface{}) *gomock.Call {
 }
 
 // Scale mocks base method
-func (m *MockDeployer) Scale(arg0 context.Context, arg1 string, arg2 uint) error {
+func (m *MockDeployer) Scale(arg0 context.Context, arg1 string, arg2 int) error {
 	ret := m.ctrl.Call(m, "Scale", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0

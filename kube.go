@@ -25,7 +25,7 @@ type Deployer interface {
 	// PodIPs returns the IPs of the Pods running with a certain tag
 	PodIPs(tag string) ([]net.IP, error)
 	// Scale scales the deployment to the given replica count
-	Scale(ctx context.Context, tag string, replicas uint) error
+	Scale(ctx context.Context, tag string, replicas int) error
 	// DeploymentName returns the name of the deployment that serves the given tag.
 	DeploymentName(tag string) string
 }
@@ -69,7 +69,7 @@ func (d inClusterDeployer) PodIPs(tag string) ([]net.IP, error) {
 	return result, nil
 }
 
-func (d inClusterDeployer) Scale(ctx context.Context, tag string, replicas uint) error {
+func (d inClusterDeployer) Scale(ctx context.Context, tag string, replicas int) error {
 	deploymentsClient := d.clientset.AppsV1beta2().Deployments(d.namespace)
 	deployName := d.DeploymentName(tag)
 
@@ -129,7 +129,7 @@ func (d inClusterDeployer) DeploymentName(tag string) string {
 	return fmt.Sprintf("deploy-%s", tag)
 }
 
-func int32Ptr(u uint) *int32 {
+func int32Ptr(u int) *int32 {
 	i := int32(u)
 	return &i
 }

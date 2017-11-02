@@ -12,7 +12,7 @@ import (
 	mock "github.com/mbrt/k8cc/mock"
 )
 
-func TestHosts(t *testing.T) {
+func TestServiceHosts(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -35,7 +35,7 @@ func TestHosts(t *testing.T) {
 	assert.Equal(t, expected, ips)
 }
 
-func TestHostsTimeout(t *testing.T) {
+func TestServiceHostsTimeout(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 

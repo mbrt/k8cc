@@ -1,3 +1,5 @@
+//go:generate mockgen -destination mock/controller_mock.go github.com/mbrt/k8cc Clock
+
 package k8cc
 
 import (
@@ -14,6 +16,17 @@ type Controller struct {
 	leaseTime      time.Duration
 	autoscaleOpts  AutoScaleOptions
 	deployer       Deployer
+}
+
+// NewController creates a new controller with the given options and components
+func NewController(opts AutoScaleOptions, leaseTime time.Duration, d Deployer, c Clock) Controller {
+	return Controller{
+		map[string]*TagController{},
+		c,
+		leaseTime,
+		opts,
+		d,
+	}
 }
 
 // DoMaintenance takes care of scaling the deployments based on the active users
@@ -58,7 +71,7 @@ func (c *TagController) LeaseUser(user string) {
 }
 
 // DoMaintenance does the deployment scaling based on the number of active users for the tag
-func (c *TagController) DoMaintenance(ctx context.Context) (uint, error) {
+func (c *TagController) DoMaintenance(ctx context.Context) (int, error) {
 	nactive := c.uac.ActiveUsers()
 	return c.scaler.UpdateUsers(ctx, nactive)
 }
@@ -103,14 +116,14 @@ func (c *UserAccessController) LeaseUser(name string) time.Time {
 }
 
 // ActiveUsers returns the number of active users
-func (c *UserAccessController) ActiveUsers() uint {
+func (c *UserAccessController) ActiveUsers() int {
 	now := c.clock.Now()
 	for user, expTime := range c.userLeases {
 		if expTime.Before(now) {
 			delete(c.userLeases, user)
 		}
 	}
-	return uint(len(c.userLeases))
+	return len(c.userLeases)
 }
 
 type systemClock struct{}

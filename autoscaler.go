@@ -11,9 +11,9 @@ type AutoScaler struct {
 
 // AutoScaleOptions contains options for an AutoScaler
 type AutoScaleOptions struct {
-	MinReplicas     uint
-	MaxReplicas     uint
-	ReplicasPerUser uint
+	MinReplicas     int
+	MaxReplicas     int
+	ReplicasPerUser int
 }
 
 // NewAutoScaler creates a default autoscaler with the given options
@@ -23,13 +23,13 @@ func NewAutoScaler(opts AutoScaleOptions, tag string, d Deployer) AutoScaler {
 
 // UpdateUsers scales the number of replicas given the number of users present.
 // Returns the new number of replicas.
-func (a AutoScaler) UpdateUsers(ctx context.Context, n uint) (uint, error) {
+func (a AutoScaler) UpdateUsers(ctx context.Context, n int) (int, error) {
 	r := a.computeReplicas(n)
-	err := a.deployer.Scale(ctx, a.tag, n)
+	err := a.deployer.Scale(ctx, a.tag, r)
 	return r, err
 }
 
-func (a AutoScaler) computeReplicas(numUsers uint) uint {
+func (a AutoScaler) computeReplicas(numUsers int) int {
 	ideal := numUsers * a.opts.ReplicasPerUser
 	switch {
 	case ideal < a.opts.MinReplicas:
