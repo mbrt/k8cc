@@ -3,6 +3,7 @@ package k8cc
 import (
 	"context"
 	"net"
+	"time"
 
 	"github.com/pkg/errors"
 )
@@ -15,11 +16,13 @@ var (
 // Service is an interface that implements all the APIs.
 type Service interface {
 	Hosts(ctx context.Context, tag string) ([]Host, error)
+	LeaseUser(ctx context.Context, user, tag string) (time.Time, error)
 }
 
 // NewService creates the API service
-func NewService(d Deployer) Service {
-	return service{d}
+func NewService(opts AutoScaleOptions, lease time.Duration, d Deployer) Service {
+	controller := NewController(opts, lease, d, NewSystemClock())
+	return service{d, controller}
 }
 
 // Host contains information about a build host
@@ -28,7 +31,8 @@ type Host struct {
 }
 
 type service struct {
-	dep Deployer
+	dep        Deployer
+	controller Controller
 }
 
 func (s service) Hosts(ctx context.Context, tag string) ([]Host, error) {
@@ -61,4 +65,9 @@ func (s service) Hosts(ctx context.Context, tag string) ([]Host, error) {
 		result[i] = Host{s}
 	}
 	return result, nil
+}
+
+func (s service) LeaseUser(ctx context.Context, user, tag string) (time.Time, error) {
+	expiration := s.controller.LeaseUser(user, tag)
+	return expiration, nil
 }

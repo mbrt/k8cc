@@ -42,9 +42,9 @@ func (c *Controller) DoMaintenance(ctx context.Context, logger log.Logger) {
 }
 
 // LeaseUser gives the given user another lease for the given tag
-func (c *Controller) LeaseUser(user, tag string) {
+func (c *Controller) LeaseUser(user, tag string) time.Time {
 	tc := c.getOrMakeTagController(tag)
-	tc.LeaseUser(user)
+	return tc.LeaseUser(user)
 }
 
 func (c *Controller) getOrMakeTagController(tag string) *TagController {
@@ -66,8 +66,8 @@ type TagController struct {
 }
 
 // LeaseUser resets the timer for the user and gives them another lease
-func (c *TagController) LeaseUser(user string) {
-	c.uac.LeaseUser(user)
+func (c *TagController) LeaseUser(user string) time.Time {
+	return c.uac.LeaseUser(user)
 }
 
 // DoMaintenance does the deployment scaling based on the number of active users for the tag
@@ -88,6 +88,11 @@ type UserAccessController struct {
 type Clock interface {
 	// Now returns the current time
 	Now() time.Time
+}
+
+// NewSystemClock returns a clock that always return the current time
+func NewSystemClock() Clock {
+	return systemClock{}
 }
 
 // NewUserAccessController creates a UserAccessController with the given options

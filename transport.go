@@ -26,11 +26,18 @@ func MakeHTTPHandler(s Service, logger log.Logger) http.Handler {
 		httptransport.ServerErrorEncoder(encodeError),
 	}
 
-	// GET     /hosts/:tag    retrieves the distcc hosts by tag
+	// GET     /hosts/:tag              retrieves the distcc hosts by tag
+	// PUT     /user/:user/lease/:tag   gives the user a lease for the given time
 
 	r.Methods("GET").Path("/v1/hosts/{tag}").Handler(httptransport.NewServer(
 		e.GetHostsEndpoint,
 		decodeGetHostsRequest,
+		encodeResponse,
+		options...,
+	))
+	r.Methods("PUT").Path("/v1/user/{user}/lease/{tag}").Handler(httptransport.NewServer(
+		e.PutLeaseUserEndpoint,
+		decodePutLeaseUserRequest,
 		encodeResponse,
 		options...,
 	))
@@ -87,4 +94,17 @@ func decodeGetHostsRequest(_ context.Context, r *http.Request) (request interfac
 		return nil, ErrBadRouting
 	}
 	return getHostsRequest{Tag: tag}, nil
+}
+
+func decodePutLeaseUserRequest(_ context.Context, r *http.Request) (request interface{}, err error) {
+	vars := mux.Vars(r)
+	user, ok := vars["user"]
+	if !ok {
+		return nil, ErrBadRouting
+	}
+	tag, ok := vars["tag"]
+	if !ok {
+		return nil, ErrBadRouting
+	}
+	return putLeaseUserRequest{User: user, Tag: tag}, nil
 }

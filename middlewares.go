@@ -34,3 +34,13 @@ func (mw loggingMiddleware) Hosts(ctx context.Context, tag string) (r []Host, er
 	}(time.Now())
 	return mw.next.Hosts(ctx, tag)
 }
+
+func (mw loggingMiddleware) LeaseUser(ctx context.Context, user, tag string) (r time.Time, err error) {
+	defer func(begin time.Time) {
+		lerr := mw.logger.Log("method", "LeaseUser", "user", user, "tag", tag, "took", time.Since(begin), "err", err)
+		if err != nil {
+			err = lerr
+		}
+	}(time.Now())
+	return mw.next.LeaseUser(ctx, user, tag)
+}
