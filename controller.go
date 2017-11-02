@@ -26,7 +26,6 @@ func (c *Controller) DoMaintenance(ctx context.Context, logger log.Logger) {
 			_ = logger.Log("tag", tag, "deployments", ndeploy)
 		}
 	}
-
 }
 
 // LeaseUser gives the given user another lease for the given tag

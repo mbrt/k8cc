@@ -1,3 +1,5 @@
+//go:generate mockgen -destination mock/kube_mock.go github.com/mbrt/k8cc Deployer
+
 package k8cc
 
 import (
