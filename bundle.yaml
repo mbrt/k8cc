@@ -1,0 +1,80 @@
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: k8cc-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: k8cc-operator
+subjects:
+- kind: ServiceAccount
+  name: k8cc-operator
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  name: k8cc-operator
+rules:
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs: ["get", "update"]
+- apiGroups: [""]
+  resources:
+  - pods
+  verbs: ["list"]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: k8cc-operator
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: k8cc-api
+  labels:
+    app: k8cc
+    tier: frontend
+spec:
+  ports:
+  - port: 80
+  selector:
+    app: k8cc
+    tier: frontend
+---
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: k8cc-api
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: k8cc
+        tier: frontend
+    spec:
+      containers:
+      - name: k8cc-api-server
+        command: ["/test/k8cc-api", "-http.addr=:80", "-deploy.namespace=default"]
+        image: ubuntu:16.04
+        volumeMounts:
+        - mountPath: /test
+          name: host-test
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+        ports:
+        - containerPort: 80
+      # NOTE: testing it this way for now, cause it's faster
+      #       no need to make a new image at every deployment
+      volumes:
+      - name: host-test
+        hostPath:
+          path: /root/k8cc/test
+          type: Directory
+      serviceAccountName: k8cc-operator
