@@ -26,16 +26,16 @@ func MakeHTTPHandler(s Service, logger log.Logger) http.Handler {
 		httptransport.ServerErrorEncoder(encodeError),
 	}
 
-	// GET     /hosts/:tag              retrieves the distcc hosts by tag
-	// PUT     /user/:user/lease/:tag   gives the user a lease for the given time
+	// GET     /api/v1/hosts/:tag              retrieves the distcc hosts by tag
+	// PUT     /api/v1/user/:user/lease/:tag   gives the user a lease for the given time
 
-	r.Methods("GET").Path("/v1/hosts/{tag}").Handler(httptransport.NewServer(
+	r.Methods("GET").Path("/api/v1/hosts/{tag}").Handler(httptransport.NewServer(
 		e.GetHostsEndpoint,
 		decodeGetHostsRequest,
 		encodeResponse,
 		options...,
 	))
-	r.Methods("PUT").Path("/v1/user/{user}/lease/{tag}").Handler(httptransport.NewServer(
+	r.Methods("PUT").Path("/api/v1/user/{user}/lease/{tag}").Handler(httptransport.NewServer(
 		e.PutLeaseUserEndpoint,
 		decodePutLeaseUserRequest,
 		encodeResponse,

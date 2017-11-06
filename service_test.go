@@ -16,16 +16,15 @@ func TestServiceHosts(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	leaseTime := 1 * time.Minute
-	opts := AutoScaleOptions{}
 	deployIPs := []net.IP{
 		net.ParseIP("10.0.0.5"),
 		net.ParseIP("10.0.0.10"),
 	}
 	deployer := mock.NewMockDeployer(ctrl)
 	deployer.EXPECT().PodIPs("foo").Return(deployIPs, nil)
+	contr := mock.NewMockController(ctrl)
 
-	service := NewService(opts, leaseTime, deployer)
+	service := NewService(deployer, contr)
 	ips, err := service.Hosts(context.Background(), "foo")
 
 	expected := make([]Host, len(deployIPs))
@@ -41,17 +40,16 @@ func TestServiceHostsTimeout(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	leaseTime := 1 * time.Minute
-	opts := AutoScaleOptions{}
 	deployer := mock.NewMockDeployer(ctrl)
 	deployer.EXPECT().PodIPs("foo").Do(func(_ string) ([]net.IP, error) {
 		time.Sleep(300 * time.Millisecond)
 		return []net.IP{net.ParseIP("127.0.0.1")}, nil
 	})
+	contr := mock.NewMockController(ctrl)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
-	service := NewService(opts, leaseTime, deployer)
+	service := NewService(deployer, contr)
 	ips, err := service.Hosts(ctx, "foo")
 
 	assert.Nil(t, ips)

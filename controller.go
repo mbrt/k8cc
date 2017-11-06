@@ -1,4 +1,4 @@
-//go:generate mockgen -destination mock/controller_mock.go github.com/mbrt/k8cc Clock
+//go:generate mockgen -destination mock/controller_mock.go github.com/mbrt/k8cc Clock,Controller
 
 package k8cc
 
@@ -10,44 +10,51 @@ import (
 )
 
 // Controller manages the scaling of all the controlled deployments
-type Controller struct {
+type Controller interface {
+	// DoMaintenance takes care of scaling the deployments based on the active users
+	DoMaintenance(ctx context.Context)
+	// LeaseUser gives the given user another lease for the given tag
+	LeaseUser(user, tag string) time.Time
+}
+
+type controller struct {
 	tagControllers map[string]*TagController
 	clock          Clock
 	leaseTime      time.Duration
 	autoscaleOpts  AutoScaleOptions
 	deployer       Deployer
+	logger         log.Logger
 }
 
 // NewController creates a new controller with the given options and components
-func NewController(opts AutoScaleOptions, leaseTime time.Duration, d Deployer, c Clock) Controller {
-	return Controller{
+func NewController(opts AutoScaleOptions, leaseTime time.Duration, d Deployer, c Clock, l log.Logger) Controller {
+	return &controller{
 		map[string]*TagController{},
 		c,
 		leaseTime,
 		opts,
 		d,
+		l,
 	}
 }
 
-// DoMaintenance takes care of scaling the deployments based on the active users
-func (c *Controller) DoMaintenance(ctx context.Context, logger log.Logger) {
+func (c *controller) DoMaintenance(ctx context.Context) {
 	for tag, tc := range c.tagControllers {
 		ndeploy, err := tc.DoMaintenance(ctx)
 		if err != nil {
-			_ = logger.Log("tag", tag, "err", err)
+			_ = c.logger.Log("tag", tag, "err", err)
 		} else {
-			_ = logger.Log("tag", tag, "deployments", ndeploy)
+			_ = c.logger.Log("tag", tag, "deployments", ndeploy)
 		}
 	}
 }
 
-// LeaseUser gives the given user another lease for the given tag
-func (c *Controller) LeaseUser(user, tag string) time.Time {
+func (c *controller) LeaseUser(user, tag string) time.Time {
 	tc := c.getOrMakeTagController(tag)
 	return tc.LeaseUser(user)
 }
 
-func (c *Controller) getOrMakeTagController(tag string) *TagController {
+func (c *controller) getOrMakeTagController(tag string) *TagController {
 	_, ok := c.tagControllers[tag]
 	if !ok {
 		new := TagController{

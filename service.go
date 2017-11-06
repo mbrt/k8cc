@@ -20,9 +20,8 @@ type Service interface {
 }
 
 // NewService creates the API service
-func NewService(opts AutoScaleOptions, lease time.Duration, d Deployer) Service {
-	controller := NewController(opts, lease, d, NewSystemClock())
-	return service{d, controller}
+func NewService(d Deployer, c Controller) Service {
+	return service{d, c}
 }
 
 // Host contains information about a build host

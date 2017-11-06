@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net/http"
@@ -18,10 +19,11 @@ func main() {
 	var (
 		httpAddr         = flag.String("http.addr", ":8080", "HTTP listen address")
 		namespace        = flag.String("deploy.namespace", "k8cc", "Kubernetes namespace for distcc deployments")
-		minReplicas      = flag.Int("autoscale.minReplicas", 1, "Minimum number of replicas with no active users")
-		maxReplicas      = flag.Int("autoscale.maxReplicas", 10, "Maximum number of replicas")
-		replicasPerUser  = flag.Int("autoscale.replicasPerUser", 5, "Number of replicas per active user")
-		leaseTimeMinutes = flag.Int("user.leasetime", 15, "Lease time for users in minutes")
+		minReplicas      = flag.Int("autoscale.min-replicas", 1, "Minimum number of replicas with no active users")
+		maxReplicas      = flag.Int("autoscale.max-replicas", 10, "Maximum number of replicas")
+		replicasPerUser  = flag.Int("autoscale.replicas-per-user", 5, "Number of replicas per active user")
+		leaseTimeMinutes = flag.Int("user.lease-time", 15, "Lease time for users in minutes")
+		updateSleep      = flag.Int("controller.update-interval", 10, "Update interval of the controller")
 	)
 	flag.Parse()
 
@@ -45,9 +47,12 @@ func main() {
 	}
 	leaseTime := time.Duration(*leaseTimeMinutes) * time.Minute
 
+	controller := k8cc.NewController(options, leaseTime, deployer,
+		k8cc.NewSystemClock(), log.With(logger, "component", "controller"))
+
 	var s k8cc.Service
 	{
-		s = k8cc.NewService(options, leaseTime, deployer)
+		s = k8cc.NewService(deployer, controller)
 		s = k8cc.LoggingMiddleware(logger)(s)
 	}
 
@@ -66,6 +71,16 @@ func main() {
 	go func() {
 		_ = logger.Log("transport", "HTTP", "addr", *httpAddr)
 		errs <- http.ListenAndServe(*httpAddr, h)
+	}()
+
+	go func() {
+		interval := time.Duration(*updateSleep) * time.Second
+		ctx := context.Background()
+
+		for {
+			time.Sleep(interval)
+			controller.DoMaintenance(ctx)
+		}
 	}()
 
 	_ = logger.Log("exit", <-errs)
