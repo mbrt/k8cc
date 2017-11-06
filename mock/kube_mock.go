@@ -59,14 +59,14 @@ func (mr *MockDeployerMockRecorder) PodIPs(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PodIPs", reflect.TypeOf((*MockDeployer)(nil).PodIPs), arg0)
 }
 
-// Scale mocks base method
-func (m *MockDeployer) Scale(arg0 context.Context, arg1 string, arg2 int) error {
-	ret := m.ctrl.Call(m, "Scale", arg0, arg1, arg2)
+// ScaleDeploy mocks base method
+func (m *MockDeployer) ScaleDeploy(arg0 context.Context, arg1 string, arg2 int) error {
+	ret := m.ctrl.Call(m, "ScaleDeploy", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// Scale indicates an expected call of Scale
-func (mr *MockDeployerMockRecorder) Scale(arg0, arg1, arg2 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Scale", reflect.TypeOf((*MockDeployer)(nil).Scale), arg0, arg1, arg2)
+// ScaleDeploy indicates an expected call of ScaleDeploy
+func (mr *MockDeployerMockRecorder) ScaleDeploy(arg0, arg1, arg2 interface{}) *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ScaleDeploy", reflect.TypeOf((*MockDeployer)(nil).ScaleDeploy), arg0, arg1, arg2)
 }

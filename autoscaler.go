@@ -25,7 +25,7 @@ func NewAutoScaler(opts AutoScaleOptions, tag string, d Deployer) AutoScaler {
 // Returns the new number of replicas.
 func (a AutoScaler) UpdateUsers(ctx context.Context, n int) (int, error) {
 	r := a.computeReplicas(n)
-	err := a.deployer.Scale(ctx, a.tag, r)
+	err := a.deployer.ScaleDeploy(ctx, a.tag, r)
 	return r, err
 }
 
