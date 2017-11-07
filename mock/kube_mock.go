@@ -70,3 +70,15 @@ func (m *MockDeployer) ScaleDeploy(arg0 context.Context, arg1 string, arg2 int) 
 func (mr *MockDeployerMockRecorder) ScaleDeploy(arg0, arg1, arg2 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ScaleDeploy", reflect.TypeOf((*MockDeployer)(nil).ScaleDeploy), arg0, arg1, arg2)
 }
+
+// ScaleSet mocks base method
+func (m *MockDeployer) ScaleSet(arg0 context.Context, arg1 string, arg2 int) error {
+	ret := m.ctrl.Call(m, "ScaleSet", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ScaleSet indicates an expected call of ScaleSet
+func (mr *MockDeployerMockRecorder) ScaleSet(arg0, arg1, arg2 interface{}) *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ScaleSet", reflect.TypeOf((*MockDeployer)(nil).ScaleSet), arg0, arg1, arg2)
+}
