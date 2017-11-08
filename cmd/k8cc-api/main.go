@@ -13,6 +13,7 @@ import (
 	"github.com/go-kit/kit/log"
 
 	"github.com/mbrt/k8cc"
+	"github.com/mbrt/k8cc/pkg/kube"
 )
 
 func main() {
@@ -34,7 +35,7 @@ func main() {
 		logger = log.With(logger, "caller", log.DefaultCaller)
 	}
 
-	deployer, err := k8cc.NewKubeDeployer(*namespace)
+	deployer, err := kube.NewKubeDeployer(*namespace)
 	if err != nil {
 		_ = logger.Log("err", err)
 		os.Exit(1)

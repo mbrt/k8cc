@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+
+	"github.com/mbrt/k8cc/pkg/kube"
 )
 
 var (
@@ -20,7 +22,7 @@ type Service interface {
 }
 
 // NewService creates the API service
-func NewService(d Deployer, c Controller) Service {
+func NewService(d kube.Deployer, c Controller) Service {
 	return service{d, c}
 }
 
@@ -30,7 +32,7 @@ type Host struct {
 }
 
 type service struct {
-	dep        Deployer
+	dep        kube.Deployer
 	controller Controller
 }
 

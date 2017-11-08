@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	mock "github.com/mbrt/k8cc/mock"
+	kubemock "github.com/mbrt/k8cc/pkg/kube/mock"
 )
 
 var (
@@ -19,7 +20,7 @@ func TestControllerSingleUser(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	deployer := mock.NewMockDeployer(ctrl)
+	deployer := kubemock.NewMockDeployer(ctrl)
 	clock := mock.NewMockClock(ctrl)
 
 	ctx := context.Background()
@@ -72,7 +73,7 @@ func TestControllerTwoUsers(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	deployer := mock.NewMockDeployer(ctrl)
+	deployer := kubemock.NewMockDeployer(ctrl)
 	clock := mock.NewMockClock(ctrl)
 
 	ctx := context.Background()

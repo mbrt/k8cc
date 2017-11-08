@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	mock "github.com/mbrt/k8cc/mock"
+	kubemock "github.com/mbrt/k8cc/pkg/kube/mock"
 )
 
 func TestServiceHosts(t *testing.T) {
@@ -20,7 +21,7 @@ func TestServiceHosts(t *testing.T) {
 		net.ParseIP("10.0.0.5"),
 		net.ParseIP("10.0.0.10"),
 	}
-	deployer := mock.NewMockDeployer(ctrl)
+	deployer := kubemock.NewMockDeployer(ctrl)
 	deployer.EXPECT().PodIPs("foo").Return(deployIPs, nil)
 	contr := mock.NewMockController(ctrl)
 
@@ -40,7 +41,7 @@ func TestServiceHostsTimeout(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	deployer := mock.NewMockDeployer(ctrl)
+	deployer := kubemock.NewMockDeployer(ctrl)
 	deployer.EXPECT().PodIPs("foo").Do(func(_ string) ([]net.IP, error) {
 		time.Sleep(300 * time.Millisecond)
 		return []net.IP{net.ParseIP("127.0.0.1")}, nil

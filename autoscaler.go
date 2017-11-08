@@ -1,12 +1,16 @@
 package k8cc
 
-import "context"
+import (
+	"context"
+
+	"github.com/mbrt/k8cc/pkg/kube"
+)
 
 // AutoScaler scales a deployment based on the number of users
 type AutoScaler struct {
 	opts     AutoScaleOptions
 	tag      string
-	deployer Deployer
+	deployer kube.Deployer
 }
 
 // AutoScaleOptions contains options for an AutoScaler
@@ -17,7 +21,7 @@ type AutoScaleOptions struct {
 }
 
 // NewAutoScaler creates a default autoscaler with the given options
-func NewAutoScaler(opts AutoScaleOptions, tag string, d Deployer) AutoScaler {
+func NewAutoScaler(opts AutoScaleOptions, tag string, d kube.Deployer) AutoScaler {
 	return AutoScaler{opts, tag, d}
 }
 

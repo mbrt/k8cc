@@ -1,9 +1,9 @@
-//go:generate mockgen -destination mock/kube_mock.go github.com/mbrt/k8cc Deployer
+//go:generate mockgen -destination mock/deployer_mock.go github.com/mbrt/k8cc/pkg/kube Deployer
 
 // see https://github.com/kubernetes/community/blob/8cafef897a22026d42f5e5bb3f104febe7e29830/contributors/devel/controllers.md
 // and https://github.com/kubernetes/sample-controller/blob/master/controller.go
 
-package k8cc
+package kube
 
 import (
 	"context"
@@ -20,7 +20,10 @@ import (
 )
 
 var (
-	maxRetries = 10
+	statefulSetLabel   = "k8cc.io/deploy-version"
+	buildTagLabel      = "k8cc.io/build-tag"
+	statefulSetVersion = "1"
+	maxRetries         = 10
 )
 
 // Deployer handles changing and querying kubernetes deployments
@@ -34,6 +37,13 @@ type Deployer interface {
 
 	// ScaleSet scales a stateful set to the given replica count
 	ScaleSet(ctx context.Context, tag string, replicas int) error
+	DeploymentsState(ctx context.Context) ([]DeploymentState, error)
+}
+
+// DeploymentState contains the state of the deployment for a tag
+type DeploymentState struct {
+	Tag      string
+	Replicas int
 }
 
 // NewKubeDeployer creates a Deployer able to talk to an in cluster Kubernetes deployer
@@ -58,7 +68,7 @@ func (d inClusterDeployer) PodIPs(tag string) ([]net.IP, error) {
 	// example of handling deployments from the controller:
 	// https://github.com/kubernetes/kubernetes/blob/master/pkg/controller/deployment/deployment_controller.go
 	podsClient := d.clientset.CoreV1().Pods(d.namespace)
-	ls := labels.Set{"k8cc.io/deploy-tag": tag}
+	ls := labels.Set{buildTagLabel: tag}
 	lsOptions := metav1.ListOptions{LabelSelector: ls.AsSelector().String()}
 	pods, err := podsClient.List(lsOptions)
 	if err != nil {
@@ -187,7 +197,29 @@ func (d inClusterDeployer) ScaleSet(ctx context.Context, tag string, replicas in
 }
 
 func (d inClusterDeployer) DeploymentName(tag string) string {
-	return fmt.Sprintf("deploy-%s", tag)
+	return fmt.Sprintf("%s-%s", buildTagLabel, tag)
+}
+
+func (d inClusterDeployer) DeploymentsState(ctx context.Context) ([]DeploymentState, error) {
+	setsClient := d.clientset.AppsV1beta2().StatefulSets(d.namespace)
+	ls := labels.Set{statefulSetLabel: statefulSetVersion}
+	lsOptions := metav1.ListOptions{LabelSelector: ls.AsSelector().String()}
+	sets, err := setsClient.List(lsOptions)
+	if err != nil {
+		return nil, errors.Wrap(err, "error listing stateful sets")
+	}
+
+	result := []DeploymentState{}
+	for _, ss := range sets.Items {
+		tag, ok := ss.Spec.Template.Labels[buildTagLabel]
+		if !ok {
+			return nil, fmt.Errorf("missing build label from stateful set %s", ss.Name)
+		}
+		replicas := ss.Status.Replicas
+		result = append(result, DeploymentState{tag, int(replicas)})
+	}
+
+	return result, nil
 }
 
 func int32Ptr(u int) *int32 {

@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/go-kit/kit/log"
+
+	"github.com/mbrt/k8cc/pkg/kube"
 )
 
 // Controller manages the scaling of all the controlled deployments
@@ -22,12 +24,12 @@ type controller struct {
 	clock          Clock
 	leaseTime      time.Duration
 	autoscaleOpts  AutoScaleOptions
-	deployer       Deployer
+	deployer       kube.Deployer
 	logger         log.Logger
 }
 
 // NewController creates a new controller with the given options and components
-func NewController(opts AutoScaleOptions, leaseTime time.Duration, d Deployer, c Clock, l log.Logger) Controller {
+func NewController(opts AutoScaleOptions, leaseTime time.Duration, d kube.Deployer, c Clock, l log.Logger) Controller {
 	return &controller{
 		map[string]*TagController{},
 		c,
