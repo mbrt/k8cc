@@ -29,7 +29,7 @@ func TestControllerSingleUser(t *testing.T) {
 		MaxReplicas:     5,
 		ReplicasPerUser: 3,
 	}
-	storage := NewInMemoryLeaseStorage()
+	storage := NewInMemoryStorage()
 	cont := NewController(opts, leaseTime, deployer, storage, logger).(*controller)
 
 	// the user comes in
@@ -75,7 +75,7 @@ func TestControllerTwoUsers(t *testing.T) {
 		MaxReplicas:     5,
 		ReplicasPerUser: 3,
 	}
-	storage := NewInMemoryLeaseStorage()
+	storage := NewInMemoryStorage()
 	controller := NewController(opts, leaseTime, deployer, storage, logger)
 
 	// the user comes in

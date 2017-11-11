@@ -5,8 +5,8 @@ import (
 	"time"
 )
 
-// LeaseStorage stores user leases
-type LeaseStorage interface {
+// Storage stores user leases
+type Storage interface {
 	// GetLease returns a user's lease time for a specific tag, if present, nil otherwise
 	GetLease(tag, user string) *time.Time
 	// SetLease sets a user's lease time for a specific tag
@@ -15,20 +15,20 @@ type LeaseStorage interface {
 	NumActiveUsers(tag string, now time.Time) int
 }
 
-// NewInMemoryLeaseStorage returns a lease storage that keeps the information in memory
-func NewInMemoryLeaseStorage() LeaseStorage {
-	return &inMemoryLeaseStorage{
+// NewInMemoryStorage returns a lease storage that keeps the information in memory
+func NewInMemoryStorage() Storage {
+	return &inMemoryStorage{
 		map[string]tagUsersLease{},
 		sync.Mutex{},
 	}
 }
 
-type inMemoryLeaseStorage struct {
+type inMemoryStorage struct {
 	tags map[string]tagUsersLease
 	mut  sync.Mutex
 }
 
-func (s *inMemoryLeaseStorage) GetLease(tag, user string) *time.Time {
+func (s *inMemoryStorage) GetLease(tag, user string) *time.Time {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
@@ -38,7 +38,7 @@ func (s *inMemoryLeaseStorage) GetLease(tag, user string) *time.Time {
 	return nil
 }
 
-func (s *inMemoryLeaseStorage) SetLease(tag, user string, expire time.Time) {
+func (s *inMemoryStorage) SetLease(tag, user string, expire time.Time) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
@@ -48,7 +48,7 @@ func (s *inMemoryLeaseStorage) SetLease(tag, user string, expire time.Time) {
 	s.tags[tag][user] = expire
 }
 
-func (s *inMemoryLeaseStorage) NumActiveUsers(tag string, now time.Time) int {
+func (s *inMemoryStorage) NumActiveUsers(tag string, now time.Time) int {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
