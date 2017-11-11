@@ -9,7 +9,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
-	mock "github.com/mbrt/k8cc/mock"
+	mock "github.com/mbrt/k8cc/pkg/controller/mock"
 	kubemock "github.com/mbrt/k8cc/pkg/kube/mock"
 )
 

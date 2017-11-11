@@ -1,6 +1,6 @@
-//go:generate mockgen -destination mock/controller_mock.go github.com/mbrt/k8cc Clock,Controller
+//go:generate mockgen -destination mock/controller_mock.go github.com/mbrt/k8cc/pkg/controller Clock,Controller
 
-package k8cc
+package controller
 
 import (
 	"context"

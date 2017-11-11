@@ -7,6 +7,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/mbrt/k8cc/pkg/controller"
 	"github.com/mbrt/k8cc/pkg/kube"
 )
 
@@ -22,7 +23,7 @@ type Service interface {
 }
 
 // NewService creates the API service
-func NewService(d kube.Deployer, c Controller) Service {
+func NewService(d kube.Deployer, c controller.Controller) Service {
 	return service{d, c}
 }
 
@@ -33,7 +34,7 @@ type Host struct {
 
 type service struct {
 	dep        kube.Deployer
-	controller Controller
+	controller controller.Controller
 }
 
 func (s service) Hosts(ctx context.Context, tag string) ([]Host, error) {

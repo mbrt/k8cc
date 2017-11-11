@@ -13,6 +13,7 @@ import (
 	"github.com/go-kit/kit/log"
 
 	"github.com/mbrt/k8cc"
+	"github.com/mbrt/k8cc/pkg/controller"
 	"github.com/mbrt/k8cc/pkg/kube"
 )
 
@@ -41,15 +42,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	options := k8cc.AutoScaleOptions{
+	options := controller.AutoScaleOptions{
 		MinReplicas:     *minReplicas,
 		MaxReplicas:     *maxReplicas,
 		ReplicasPerUser: *replicasPerUser,
 	}
 	leaseTime := time.Duration(*leaseTimeMinutes) * time.Minute
 
-	controller := k8cc.NewController(options, leaseTime, deployer,
-		k8cc.NewSystemClock(), log.With(logger, "component", "controller"))
+	controller := controller.NewController(options, leaseTime, deployer,
+		controller.NewSystemClock(), log.With(logger, "component", "controller"))
 
 	var s k8cc.Service
 	{
