@@ -49,7 +49,8 @@ func main() {
 	}
 	leaseTime := time.Duration(*leaseTimeMinutes) * time.Minute
 
-	controller := controller.NewController(options, leaseTime, deployer, log.With(logger, "component", "controller"))
+	storage := controller.NewInMemoryLeaseStorage()
+	controller := controller.NewController(options, leaseTime, deployer, storage, log.With(logger, "component", "controller"))
 
 	var s k8cc.Service
 	{

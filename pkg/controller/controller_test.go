@@ -29,13 +29,14 @@ func TestControllerSingleUser(t *testing.T) {
 		MaxReplicas:     5,
 		ReplicasPerUser: 3,
 	}
-	cont := NewController(opts, leaseTime, deployer, logger).(*controller)
+	storage := NewInMemoryLeaseStorage()
+	cont := NewController(opts, leaseTime, deployer, storage, logger).(*controller)
 
 	// the user comes in
 	cont.LeaseUser("mike", "master", now)
 
 	// test it is considered as active now
-	assert.Equal(t, 1, cont.tagControllers["master"].uac.ActiveUsers(now))
+	assert.Equal(t, 1, storage.NumActiveUsers("master", now))
 
 	// let's do maintenance now
 	deployer.EXPECT().ScaleDeploy(gomock.Any(), "master", 3).Return(nil)
@@ -74,7 +75,8 @@ func TestControllerTwoUsers(t *testing.T) {
 		MaxReplicas:     5,
 		ReplicasPerUser: 3,
 	}
-	controller := NewController(opts, leaseTime, deployer, logger)
+	storage := NewInMemoryLeaseStorage()
+	controller := NewController(opts, leaseTime, deployer, storage, logger)
 
 	// the user comes in
 	controller.LeaseUser("mike", "master", now)

@@ -24,17 +24,24 @@ type controller struct {
 	leaseTime      time.Duration
 	autoscaleOpts  AutoScaleOptions
 	deployer       kube.Deployer
+	leases         LeaseStorage
 	logger         log.Logger
 }
 
 // NewController creates a new controller with the given options and components
-func NewController(opts AutoScaleOptions, leaseTime time.Duration, d kube.Deployer, l log.Logger) Controller {
+func NewController(opts AutoScaleOptions,
+	leaseTime time.Duration,
+	deployer kube.Deployer,
+	leases LeaseStorage,
+	logger log.Logger,
+) Controller {
 	return &controller{
 		map[string]*TagController{},
 		leaseTime,
 		opts,
-		d,
-		l,
+		deployer,
+		leases,
+		logger,
 	}
 }
 
@@ -58,10 +65,33 @@ func (c *controller) getOrMakeTagController(tag string) *TagController {
 	_, ok := c.tagControllers[tag]
 	if !ok {
 		new := TagController{
-			NewUserAccessController(c.leaseTime),
+			tag,
+			c.leaseTime,
+			c.leases,
 			NewAutoScaler(c.autoscaleOpts, tag, c.deployer),
 		}
 		c.tagControllers[tag] = &new
 	}
 	return c.tagControllers[tag]
+}
+
+// TagController manages the scaling of a single tag
+type TagController struct {
+	tagName   string
+	leaseTime time.Duration
+	leases    LeaseStorage
+	scaler    AutoScaler
+}
+
+// LeaseUser resets the timer for the user and gives them another lease
+func (c *TagController) LeaseUser(user string, now time.Time) time.Time {
+	t := now.Add(c.leaseTime)
+	c.leases.SetLease(c.tagName, user, t)
+	return t
+}
+
+// DoMaintenance does the deployment scaling based on the number of active users for the tag
+func (c *TagController) DoMaintenance(ctx context.Context, now time.Time) (int, error) {
+	nactive := c.leases.NumActiveUsers(c.tagName, now)
+	return c.scaler.UpdateUsers(ctx, nactive)
 }
