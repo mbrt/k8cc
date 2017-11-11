@@ -70,6 +70,6 @@ func (s service) Hosts(ctx context.Context, tag string) ([]Host, error) {
 }
 
 func (s service) LeaseUser(ctx context.Context, user, tag string) (time.Time, error) {
-	expiration := s.controller.LeaseUser(user, tag)
+	expiration := s.controller.LeaseUser(user, tag, time.Now())
 	return expiration, nil
 }

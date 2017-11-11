@@ -49,8 +49,7 @@ func main() {
 	}
 	leaseTime := time.Duration(*leaseTimeMinutes) * time.Minute
 
-	controller := controller.NewController(options, leaseTime, deployer,
-		controller.NewSystemClock(), log.With(logger, "component", "controller"))
+	controller := controller.NewController(options, leaseTime, deployer, log.With(logger, "component", "controller"))
 
 	var s k8cc.Service
 	{
@@ -81,7 +80,7 @@ func main() {
 
 		for {
 			time.Sleep(interval)
-			controller.DoMaintenance(ctx)
+			controller.DoMaintenance(ctx, time.Now())
 		}
 	}()
 

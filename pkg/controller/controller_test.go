@@ -8,7 +8,6 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
-	mock "github.com/mbrt/k8cc/pkg/controller/mock"
 	kubemock "github.com/mbrt/k8cc/pkg/kube/mock"
 )
 
@@ -21,7 +20,6 @@ func TestControllerSingleUser(t *testing.T) {
 	defer ctrl.Finish()
 
 	deployer := kubemock.NewMockDeployer(ctrl)
-	clock := mock.NewMockClock(ctrl)
 
 	ctx := context.Background()
 	now := time.Now()
@@ -31,42 +29,35 @@ func TestControllerSingleUser(t *testing.T) {
 		MaxReplicas:     5,
 		ReplicasPerUser: 3,
 	}
-	cont := NewController(opts, leaseTime, deployer, clock, logger).(*controller)
+	cont := NewController(opts, leaseTime, deployer, logger).(*controller)
 
 	// the user comes in
-	clock.EXPECT().Now().Return(now)
-	cont.LeaseUser("mike", "master")
+	cont.LeaseUser("mike", "master", now)
 
 	// test it is considered as active now
-	clock.EXPECT().Now().Return(now)
-	assert.Equal(t, 1, cont.tagControllers["master"].uac.ActiveUsers())
+	assert.Equal(t, 1, cont.tagControllers["master"].uac.ActiveUsers(now))
 
 	// let's do maintenance now
-	clock.EXPECT().Now().Return(now)
 	deployer.EXPECT().ScaleDeploy(gomock.Any(), "master", 3).Return(nil)
-	cont.DoMaintenance(ctx)
+	cont.DoMaintenance(ctx, now)
 
 	// some times has passed, but the user didn't expire
 	now = now.Add(5 * time.Minute)
-	clock.EXPECT().Now().Return(now)
 	deployer.EXPECT().ScaleDeploy(gomock.Any(), "master", 3).Return(nil)
-	cont.DoMaintenance(ctx)
+	cont.DoMaintenance(ctx, now)
 
 	// renew the lease for the same user
-	clock.EXPECT().Now().Return(now)
-	cont.LeaseUser("mike", "master")
+	cont.LeaseUser("mike", "master", now)
 
 	// now if other 6 minutes passed, the lease shouldn't have expired
 	now = now.Add(6 * time.Minute)
-	clock.EXPECT().Now().Return(now)
 	deployer.EXPECT().ScaleDeploy(gomock.Any(), "master", 3).Return(nil)
-	cont.DoMaintenance(ctx)
+	cont.DoMaintenance(ctx, now)
 
 	// and now if other 5 pass, it should expire
 	now = now.Add(5 * time.Minute)
-	clock.EXPECT().Now().Return(now)
 	deployer.EXPECT().ScaleDeploy(gomock.Any(), "master", 1).Return(nil)
-	cont.DoMaintenance(ctx)
+	cont.DoMaintenance(ctx, now)
 }
 
 func TestControllerTwoUsers(t *testing.T) {
@@ -74,7 +65,6 @@ func TestControllerTwoUsers(t *testing.T) {
 	defer ctrl.Finish()
 
 	deployer := kubemock.NewMockDeployer(ctrl)
-	clock := mock.NewMockClock(ctrl)
 
 	ctx := context.Background()
 	now := time.Now()
@@ -84,32 +74,27 @@ func TestControllerTwoUsers(t *testing.T) {
 		MaxReplicas:     5,
 		ReplicasPerUser: 3,
 	}
-	controller := NewController(opts, leaseTime, deployer, clock, logger)
+	controller := NewController(opts, leaseTime, deployer, logger)
 
 	// the user comes in
-	clock.EXPECT().Now().Return(now)
-	controller.LeaseUser("mike", "master")
+	controller.LeaseUser("mike", "master", now)
 
 	// let's do maintenance now
-	clock.EXPECT().Now().Return(now)
 	deployer.EXPECT().ScaleDeploy(gomock.Any(), "master", 3).Return(nil)
-	controller.DoMaintenance(ctx)
+	controller.DoMaintenance(ctx, now)
 
 	// after 3 minutes another user arrives
 	now = now.Add(3 * time.Minute)
-	clock.EXPECT().Now().Return(now)
-	controller.LeaseUser("alice", "master")
+	controller.LeaseUser("alice", "master", now)
 
 	// maximum deployments has been reached
-	clock.EXPECT().Now().Return(now)
 	deployer.EXPECT().ScaleDeploy(gomock.Any(), "master", 5).Return(nil)
-	controller.DoMaintenance(ctx)
+	controller.DoMaintenance(ctx, now)
 
 	// now 8 minutes pass: the first user expires, the second doesn't
 	now = now.Add(8 * time.Minute)
-	clock.EXPECT().Now().Return(now)
 	deployer.EXPECT().ScaleDeploy(gomock.Any(), "master", 3).Return(nil)
-	controller.DoMaintenance(ctx)
+	controller.DoMaintenance(ctx, now)
 }
 
 type dummyLogger struct{}
