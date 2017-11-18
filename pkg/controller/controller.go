@@ -1,4 +1,4 @@
-//go:generate mockgen -destination mock/controller_mock.go github.com/mbrt/k8cc/pkg/controller Controller
+//go:generate mockgen -destination mock/controller_mock.go github.com/mbrt/k8cc/pkg/controller Controller,TagController
 
 package controller
 
@@ -15,28 +15,31 @@ import (
 type Controller interface {
 	// DoMaintenance takes care of scaling the deployments based on the active users
 	DoMaintenance(ctx context.Context, now time.Time)
-	// LeaseUser gives the given user another lease for the given tag
-	LeaseUser(user, tag string, now time.Time) time.Time
+	// TagController returns the controller for the given tag
+	TagController(tag string) TagController
 }
 
-type controller struct {
-	tagControllers map[string]*TagController
-	leaseTime      time.Duration
-	autoscaleOpts  AutoScaleOptions
-	deployer       kube.Deployer
-	storage        Storage
-	logger         log.Logger
+// TagController manages a single tag deployment
+type TagController interface {
+	// LeaseUser gives the given user another lease
+	LeaseUser(user string, now time.Time) (Lease, error)
 }
 
-// NewController creates a new controller with the given options and components
-func NewController(opts AutoScaleOptions,
+// Lease contains info about a lease for a specific user and tag
+type Lease struct {
+	Expiration time.Time
+	Hosts      []string
+}
+
+// NewDeployController creates a new controller with the given options and components
+func NewDeployController(opts AutoScaleOptions,
 	leaseTime time.Duration,
 	deployer kube.Deployer,
 	storage Storage,
 	logger log.Logger,
 ) Controller {
-	return &controller{
-		map[string]*TagController{},
+	return &deployController{
+		map[string]*deployTagController{},
 		leaseTime,
 		opts,
 		deployer,
@@ -45,7 +48,16 @@ func NewController(opts AutoScaleOptions,
 	}
 }
 
-func (c *controller) DoMaintenance(ctx context.Context, now time.Time) {
+type deployController struct {
+	tagControllers map[string]*deployTagController
+	leaseTime      time.Duration
+	autoscaleOpts  AutoScaleOptions
+	deployer       kube.Deployer
+	storage        Storage
+	logger         log.Logger
+}
+
+func (c *deployController) DoMaintenance(ctx context.Context, now time.Time) {
 	for tag, tc := range c.tagControllers {
 		ndeploy, err := tc.DoMaintenance(ctx, now)
 		if err != nil {
@@ -56,15 +68,14 @@ func (c *controller) DoMaintenance(ctx context.Context, now time.Time) {
 	}
 }
 
-func (c *controller) LeaseUser(user, tag string, now time.Time) time.Time {
-	tc := c.getOrMakeTagController(tag)
-	return tc.LeaseUser(user, now)
+func (c *deployController) TagController(tag string) TagController {
+	return c.getOrMakeTagController(tag)
 }
 
-func (c *controller) getOrMakeTagController(tag string) *TagController {
+func (c *deployController) getOrMakeTagController(tag string) *deployTagController {
 	_, ok := c.tagControllers[tag]
 	if !ok {
-		new := TagController{
+		new := deployTagController{
 			tag,
 			c.leaseTime,
 			c.storage,
@@ -75,23 +86,23 @@ func (c *controller) getOrMakeTagController(tag string) *TagController {
 	return c.tagControllers[tag]
 }
 
-// TagController manages the scaling of a single tag
-type TagController struct {
+type deployTagController struct {
 	tagName   string
 	leaseTime time.Duration
 	storage   Storage
 	scaler    AutoScaler
 }
 
-// LeaseUser resets the timer for the user and gives them another lease
-func (c *TagController) LeaseUser(user string, now time.Time) time.Time {
+func (c *deployTagController) LeaseUser(user string, now time.Time) (Lease, error) {
 	t := now.Add(c.leaseTime)
 	c.storage.SetLease(c.tagName, user, t)
-	return t
+	result := Lease{
+		Expiration: t,
+	}
+	return result, nil
 }
 
-// DoMaintenance does the deployment scaling based on the number of active users for the tag
-func (c *TagController) DoMaintenance(ctx context.Context, now time.Time) (int, error) {
+func (c *deployTagController) DoMaintenance(ctx context.Context, now time.Time) (int, error) {
 	nactive := c.storage.NumActiveUsers(c.tagName, now)
 	return c.scaler.UpdateUsers(ctx, nactive)
 }

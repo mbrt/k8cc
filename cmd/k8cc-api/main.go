@@ -50,7 +50,7 @@ func main() {
 	leaseTime := time.Duration(*leaseTimeMinutes) * time.Minute
 
 	storage := controller.NewInMemoryStorage()
-	controller := controller.NewController(options, leaseTime, deployer, storage, log.With(logger, "component", "controller"))
+	controller := controller.NewDeployController(options, leaseTime, deployer, storage, log.With(logger, "component", "controller"))
 
 	var s api.Service
 	{

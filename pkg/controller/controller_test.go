@@ -30,10 +30,12 @@ func TestControllerSingleUser(t *testing.T) {
 		ReplicasPerUser: 3,
 	}
 	storage := NewInMemoryStorage()
-	cont := NewController(opts, leaseTime, deployer, storage, logger).(*controller)
+	cont := NewDeployController(opts, leaseTime, deployer, storage, logger).(*deployController)
+	tagController := cont.TagController("master")
 
 	// the user comes in
-	cont.LeaseUser("mike", "master", now)
+	_, err := tagController.LeaseUser("mike", now)
+	assert.Nil(t, err)
 
 	// test it is considered as active now
 	assert.Equal(t, 1, storage.NumActiveUsers("master", now))
@@ -48,7 +50,8 @@ func TestControllerSingleUser(t *testing.T) {
 	cont.DoMaintenance(ctx, now)
 
 	// renew the lease for the same user
-	cont.LeaseUser("mike", "master", now)
+	_, err = tagController.LeaseUser("mike", now)
+	assert.Nil(t, err)
 
 	// now if other 6 minutes passed, the lease shouldn't have expired
 	now = now.Add(6 * time.Minute)
@@ -76,10 +79,12 @@ func TestControllerTwoUsers(t *testing.T) {
 		ReplicasPerUser: 3,
 	}
 	storage := NewInMemoryStorage()
-	controller := NewController(opts, leaseTime, deployer, storage, logger)
+	controller := NewDeployController(opts, leaseTime, deployer, storage, logger)
+	tagController := controller.TagController("master")
 
 	// the user comes in
-	controller.LeaseUser("mike", "master", now)
+	_, err := tagController.LeaseUser("mike", now)
+	assert.Nil(t, err)
 
 	// let's do maintenance now
 	deployer.EXPECT().ScaleDeploy(gomock.Any(), "master", 3).Return(nil)
@@ -87,7 +92,8 @@ func TestControllerTwoUsers(t *testing.T) {
 
 	// after 3 minutes another user arrives
 	now = now.Add(3 * time.Minute)
-	controller.LeaseUser("alice", "master", now)
+	_, err = tagController.LeaseUser("alice", now)
+	assert.Nil(t, err)
 
 	// maximum deployments has been reached
 	deployer.EXPECT().ScaleDeploy(gomock.Any(), "master", 5).Return(nil)
