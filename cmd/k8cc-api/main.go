@@ -12,7 +12,7 @@ import (
 
 	"github.com/go-kit/kit/log"
 
-	"github.com/mbrt/k8cc"
+	"github.com/mbrt/k8cc/pkg/api"
 	"github.com/mbrt/k8cc/pkg/controller"
 	"github.com/mbrt/k8cc/pkg/kube"
 )
@@ -52,15 +52,15 @@ func main() {
 	storage := controller.NewInMemoryStorage()
 	controller := controller.NewController(options, leaseTime, deployer, storage, log.With(logger, "component", "controller"))
 
-	var s k8cc.Service
+	var s api.Service
 	{
-		s = k8cc.NewService(deployer, controller)
-		s = k8cc.LoggingMiddleware(logger)(s)
+		s = api.NewService(deployer, controller)
+		s = api.LoggingMiddleware(logger)(s)
 	}
 
 	var h http.Handler
 	{
-		h = k8cc.MakeHTTPHandler(s, log.With(logger, "component", "HTTP"))
+		h = api.MakeHTTPHandler(s, log.With(logger, "component", "HTTP"))
 	}
 
 	errs := make(chan error)

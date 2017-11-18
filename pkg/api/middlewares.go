@@ -1,4 +1,4 @@
-package k8cc
+package api
 
 import (
 	"context"
