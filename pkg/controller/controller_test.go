@@ -23,18 +23,18 @@ func TestControllerSingleUser(t *testing.T) {
 
 	ctx := context.Background()
 	now := time.Now()
-	leaseTime := 10 * time.Minute
 	opts := AutoScaleOptions{
 		MinReplicas:     1,
 		MaxReplicas:     5,
 		ReplicasPerUser: 3,
+		LeaseTime:       10 * time.Minute,
 	}
 	storage := NewInMemoryStorage()
-	cont := NewDeployController(opts, leaseTime, deployer, storage, logger).(*deployController)
+	cont := NewDeployController(opts, deployer, storage, logger).(*deployController)
 	tagController := cont.TagController("master")
 
 	// the user comes in
-	_, err := tagController.LeaseUser("mike", now)
+	_, err := tagController.LeaseUser(ctx, "mike", now)
 	assert.Nil(t, err)
 
 	// test it is considered as active now
@@ -50,7 +50,7 @@ func TestControllerSingleUser(t *testing.T) {
 	cont.DoMaintenance(ctx, now)
 
 	// renew the lease for the same user
-	_, err = tagController.LeaseUser("mike", now)
+	_, err = tagController.LeaseUser(ctx, "mike", now)
 	assert.Nil(t, err)
 
 	// now if other 6 minutes passed, the lease shouldn't have expired
@@ -72,18 +72,18 @@ func TestControllerTwoUsers(t *testing.T) {
 
 	ctx := context.Background()
 	now := time.Now()
-	leaseTime := 10 * time.Minute
 	opts := AutoScaleOptions{
 		MinReplicas:     1,
 		MaxReplicas:     5,
 		ReplicasPerUser: 3,
+		LeaseTime:       10 * time.Minute,
 	}
 	storage := NewInMemoryStorage()
-	controller := NewDeployController(opts, leaseTime, deployer, storage, logger)
+	controller := NewDeployController(opts, deployer, storage, logger)
 	tagController := controller.TagController("master")
 
 	// the user comes in
-	_, err := tagController.LeaseUser("mike", now)
+	_, err := tagController.LeaseUser(ctx, "mike", now)
 	assert.Nil(t, err)
 
 	// let's do maintenance now
@@ -92,7 +92,7 @@ func TestControllerTwoUsers(t *testing.T) {
 
 	// after 3 minutes another user arrives
 	now = now.Add(3 * time.Minute)
-	_, err = tagController.LeaseUser("alice", now)
+	_, err = tagController.LeaseUser(ctx, "alice", now)
 	assert.Nil(t, err)
 
 	// maximum deployments has been reached

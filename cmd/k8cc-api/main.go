@@ -21,9 +21,9 @@ func main() {
 	var (
 		httpAddr         = flag.String("http.addr", ":8080", "HTTP listen address")
 		namespace        = flag.String("deploy.namespace", "k8cc", "Kubernetes namespace for distcc deployments")
-		minReplicas      = flag.Int("autoscale.min-replicas", 1, "Minimum number of replicas with no active users")
-		maxReplicas      = flag.Int("autoscale.max-replicas", 10, "Maximum number of replicas")
-		replicasPerUser  = flag.Int("autoscale.replicas-per-user", 5, "Number of replicas per active user")
+		minReplicas      = flag.Int("scale.min-replicas", 1, "Minimum number of replicas with no active users")
+		maxReplicas      = flag.Int("scale.max-replicas", 10, "Maximum number of replicas")
+		replicasPerUser  = flag.Int("scale.replicas-per-user", 5, "Number of replicas per active user")
 		leaseTimeMinutes = flag.Int("user.lease-time", 15, "Lease time for users in minutes")
 		updateSleep      = flag.Int("controller.update-interval", 10, "Update interval of the controller")
 	)
@@ -46,11 +46,11 @@ func main() {
 		MinReplicas:     *minReplicas,
 		MaxReplicas:     *maxReplicas,
 		ReplicasPerUser: *replicasPerUser,
+		LeaseTime:       time.Duration(*leaseTimeMinutes) * time.Minute,
 	}
-	leaseTime := time.Duration(*leaseTimeMinutes) * time.Minute
 
 	storage := controller.NewInMemoryStorage()
-	controller := controller.NewDeployController(options, leaseTime, deployer, storage, log.With(logger, "component", "controller"))
+	controller := controller.NewDeployController(options, deployer, storage, log.With(logger, "component", "controller"))
 
 	var s api.Service
 	{

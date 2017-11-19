@@ -5,6 +5,7 @@ all:
 .PHONY: test
 test:
 	go test ./...
+	gometalinter --vendor ./...
 
 .PHONY: genmock
 genmock:
