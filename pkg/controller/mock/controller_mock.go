@@ -81,14 +81,14 @@ func (m *MockTagController) EXPECT() *MockTagControllerMockRecorder {
 }
 
 // LeaseUser mocks base method
-func (m *MockTagController) LeaseUser(arg0 string, arg1 time.Time) (controller.Lease, error) {
-	ret := m.ctrl.Call(m, "LeaseUser", arg0, arg1)
+func (m *MockTagController) LeaseUser(arg0 context.Context, arg1 string, arg2 time.Time) (controller.Lease, error) {
+	ret := m.ctrl.Call(m, "LeaseUser", arg0, arg1, arg2)
 	ret0, _ := ret[0].(controller.Lease)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // LeaseUser indicates an expected call of LeaseUser
-func (mr *MockTagControllerMockRecorder) LeaseUser(arg0, arg1 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LeaseUser", reflect.TypeOf((*MockTagController)(nil).LeaseUser), arg0, arg1)
+func (mr *MockTagControllerMockRecorder) LeaseUser(arg0, arg1, arg2 interface{}) *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LeaseUser", reflect.TypeOf((*MockTagController)(nil).LeaseUser), arg0, arg1, arg2)
 }

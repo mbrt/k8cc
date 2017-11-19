@@ -70,7 +70,7 @@ type deployTagController struct {
 
 func (c *deployTagController) LeaseUser(ctx context.Context, user string, now time.Time) (Lease, error) {
 	t := now.Add(c.opts.LeaseTime)
-	c.storage.SetLease(c.tagName, user, t)
+	c.storage.SetLease(c.tagName, user, t, nil)
 	result := Lease{
 		Expiration: t,
 	}
