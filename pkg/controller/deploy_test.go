@@ -11,16 +11,13 @@ import (
 	kubemock "github.com/mbrt/k8cc/pkg/kube/mock"
 )
 
-var (
-	logger = dummyLogger{}
-)
-
 func TestControllerSingleUser(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	deployer := kubemock.NewMockDeployer(ctrl)
 
+	logger := dummyLogger{}
 	ctx := context.Background()
 	now := time.Now()
 	opts := AutoScaleOptions{
@@ -70,6 +67,7 @@ func TestControllerTwoUsers(t *testing.T) {
 
 	deployer := kubemock.NewMockDeployer(ctrl)
 
+	logger := dummyLogger{}
 	ctx := context.Background()
 	now := time.Now()
 	opts := AutoScaleOptions{
@@ -103,10 +101,4 @@ func TestControllerTwoUsers(t *testing.T) {
 	now = now.Add(8 * time.Minute)
 	deployer.EXPECT().ScaleDeploy(gomock.Any(), "master", 3).Return(nil)
 	controller.DoMaintenance(ctx, now)
-}
-
-type dummyLogger struct{}
-
-func (d dummyLogger) Log(keyvals ...interface{}) error {
-	return nil
 }

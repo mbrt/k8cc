@@ -50,11 +50,11 @@ func main() {
 	}
 
 	storage := controller.NewInMemoryStorage()
-	controller := controller.NewDeployController(options, deployer, storage, log.With(logger, "component", "controller"))
+	contr := controller.NewDeployController(options, deployer, storage, log.With(logger, "component", "controller"))
 
 	var s api.Service
 	{
-		s = api.NewService(deployer, controller)
+		s = api.NewService(deployer, contr)
 		s = api.LoggingMiddleware(logger)(s)
 	}
 
@@ -81,7 +81,7 @@ func main() {
 
 		for {
 			time.Sleep(interval)
-			controller.DoMaintenance(ctx, time.Now())
+			contr.DoMaintenance(ctx, time.Now())
 		}
 	}()
 

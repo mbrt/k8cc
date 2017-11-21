@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-kit/kit/log"
+
 	"github.com/mbrt/k8cc/pkg/kube"
 )
 
@@ -13,11 +15,17 @@ var (
 )
 
 // NewStatefulController creates a controller that uses StatefulSets to manage the build hosts
-func NewStatefulController(opts AutoScaleOptions, storage Storage, deployer kube.Deployer) Controller {
+func NewStatefulController(
+	opts AutoScaleOptions,
+	storage Storage,
+	deployer kube.Deployer,
+	logger log.Logger,
+) Controller {
 	return statefulController{
 		opts,
 		storage,
 		deployer,
+		logger,
 	}
 }
 
@@ -25,9 +33,31 @@ type statefulController struct {
 	opts     AutoScaleOptions
 	storage  Storage
 	deployer kube.Deployer
+	logger   log.Logger
 }
 
 func (c statefulController) DoMaintenance(ctx context.Context, now time.Time) {
+	states, err := c.deployer.DeploymentsState(ctx)
+	if err != nil {
+		_ = c.logger.Log("stage", "maintenance", "err", err)
+	}
+	for _, ds := range states {
+		tagUsage := c.storage.Usage(ds.Tag, now)
+		// find the ID of the last used host in the tag
+		hostID := len(tagUsage) - 1
+		for ; hostID >= 0; hostID-- {
+			if tagUsage[hostID] > 0 {
+				break
+			}
+		}
+		// scale back the replicas if they are unused
+		requiredReplicas := hostID + 1
+		if requiredReplicas != ds.Replicas {
+			if err = c.deployer.ScaleSet(ctx, ds.Tag, requiredReplicas); err != nil {
+				_ = c.logger.Log("stage", "maintenance", "err", err)
+			}
+		}
+	}
 }
 
 func (c statefulController) TagController(tag string) TagController {
