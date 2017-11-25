@@ -8,7 +8,6 @@ import (
 	context "context"
 	gomock "github.com/golang/mock/gomock"
 	kube "github.com/mbrt/k8cc/pkg/kube"
-	net "net"
 	reflect "reflect"
 )
 
@@ -58,31 +57,6 @@ func (m *MockDeployer) DeploymentsState(arg0 context.Context) ([]kube.Deployment
 // DeploymentsState indicates an expected call of DeploymentsState
 func (mr *MockDeployerMockRecorder) DeploymentsState(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeploymentsState", reflect.TypeOf((*MockDeployer)(nil).DeploymentsState), arg0)
-}
-
-// PodIPs mocks base method
-func (m *MockDeployer) PodIPs(arg0 string) ([]net.IP, error) {
-	ret := m.ctrl.Call(m, "PodIPs", arg0)
-	ret0, _ := ret[0].([]net.IP)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// PodIPs indicates an expected call of PodIPs
-func (mr *MockDeployerMockRecorder) PodIPs(arg0 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PodIPs", reflect.TypeOf((*MockDeployer)(nil).PodIPs), arg0)
-}
-
-// ScaleDeploy mocks base method
-func (m *MockDeployer) ScaleDeploy(arg0 context.Context, arg1 string, arg2 int) error {
-	ret := m.ctrl.Call(m, "ScaleDeploy", arg0, arg1, arg2)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// ScaleDeploy indicates an expected call of ScaleDeploy
-func (mr *MockDeployerMockRecorder) ScaleDeploy(arg0, arg1, arg2 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ScaleDeploy", reflect.TypeOf((*MockDeployer)(nil).ScaleDeploy), arg0, arg1, arg2)
 }
 
 // ScaleSet mocks base method
