@@ -38,6 +38,7 @@ func main() {
 
 	deployer, err := kube.NewKubeDeployer(*namespace)
 	if err != nil {
+		/* #nosec */
 		_ = logger.Log("err", err)
 		os.Exit(1)
 	}
@@ -50,7 +51,7 @@ func main() {
 	}
 
 	storage := controller.NewInMemoryStorage()
-	contr := controller.NewDeployController(options, deployer, storage, log.With(logger, "component", "controller"))
+	contr := controller.NewStatefulController(options, storage, deployer, log.With(logger, "component", "controller"))
 
 	var s api.Service
 	{
@@ -71,6 +72,7 @@ func main() {
 	}()
 
 	go func() {
+		/* #nosec */
 		_ = logger.Log("transport", "HTTP", "addr", *httpAddr)
 		errs <- http.ListenAndServe(*httpAddr, h)
 	}()
@@ -85,5 +87,6 @@ func main() {
 		}
 	}()
 
+	/* #nosec */
 	_ = logger.Log("exit", <-errs)
 }
