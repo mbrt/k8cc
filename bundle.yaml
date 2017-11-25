@@ -19,8 +19,8 @@ rules:
 - apiGroups:
   - apps
   resources:
-  - deployments
-  verbs: ["get", "update"]
+  - statefulsets
+  verbs: ["get", "update", "list"]
 - apiGroups: [""]
   resources:
   - pods
