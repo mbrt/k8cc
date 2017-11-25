@@ -21,7 +21,7 @@ import (
 var (
 	statefulSetLabel   = "k8cc.io/deploy-version"
 	buildTagLabel      = "k8cc.io/build-tag"
-	statefulSetVersion = "1"
+	statefulSetVersion = "v1"
 	maxRetries         = 10
 )
 
@@ -115,7 +115,7 @@ func (d inClusterDeployer) ScaleSet(ctx context.Context, tag string, replicas in
 }
 
 func (d inClusterDeployer) DeploymentName(tag string) string {
-	return fmt.Sprintf("%s-%s", buildTagLabel, tag)
+	return fmt.Sprintf("k8cc-build-%s", tag)
 }
 
 func (d inClusterDeployer) DeploymentsState(ctx context.Context) ([]DeploymentState, error) {
