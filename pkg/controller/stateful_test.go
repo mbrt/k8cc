@@ -59,15 +59,29 @@ func TestStatefulSingleUser(t *testing.T) {
 	deployer.EXPECT().DeploymentsState(ctx).Return(currState, nil)
 	cont.DoMaintenance(ctx, now)
 
+	// if a user renews the lease, it'll get new hosts (correct), but
+	// then the old hosts are still assigned to the same user. They
+	// should instead be revoked
+	deployer.EXPECT().ScaleSet(ctx, "master", 3).Return(nil)
+	lease, err = tagController.LeaseUser(ctx, "mike", now)
+	assert.Nil(t, err)
+	exp1 = now.Add(opts.LeaseTime)
+	expLease = Lease{
+		Expiration: exp1,
+		Hosts: []string{
+			"k8cc-build-master0",
+			"k8cc-build-master1",
+			"k8cc-build-master2",
+		},
+	}
+	assert.Equal(t, expLease, lease)
+	assert.Equal(t, 1, storage.NumActiveUsers("master", now))
+
 	// now the user expired, the set is scaled to 0 replicas
-	now = now.Add(6 * time.Minute)
+	now = exp1.Add(1 * time.Second)
 	deployer.EXPECT().DeploymentsState(ctx).Return(currState, nil)
 	deployer.EXPECT().ScaleSet(ctx, "master", 0).Return(nil)
 	cont.DoMaintenance(ctx, now)
-
-	// FIXME: if a user renew the lease, it'll get new hosts (correct),
-	// but then the old hosts are still assigned to the same user. They
-	// should instead be revoked
 }
 
 func TestStatefulTwoUsers(t *testing.T) {
@@ -102,11 +116,13 @@ func TestStatefulTwoUsers(t *testing.T) {
 			"k8cc-build-master2",
 		},
 	}
-	assert.Equal(t, expLease, lease)
-	assert.Equal(t, 1, storage.NumActiveUsers("master", now))
+	currUsage := []int{1, 1, 1}
 	currState := []kube.DeploymentState{
 		kube.DeploymentState{Tag: "master", Replicas: 3},
 	}
+	assert.Equal(t, expLease, lease)
+	assert.Equal(t, 1, storage.NumActiveUsers("master", now))
+	assert.Equal(t, currUsage, storage.Usage("master", now))
 
 	// let's do maintenance now, nothing changes
 	deployer.EXPECT().DeploymentsState(ctx).Return(currState, nil)
@@ -126,18 +142,22 @@ func TestStatefulTwoUsers(t *testing.T) {
 			"k8cc-build-master0",
 		},
 	}
-	assert.Equal(t, expLease, lease)
-	assert.Equal(t, 2, storage.NumActiveUsers("master", now))
+	currUsage = []int{2, 1, 1, 1, 1}
 	currState = []kube.DeploymentState{
 		kube.DeploymentState{Tag: "master", Replicas: 5},
 	}
+	assert.Equal(t, expLease, lease)
+	assert.Equal(t, 2, storage.NumActiveUsers("master", now))
+	assert.Equal(t, currUsage, storage.Usage("master", now))
 
 	// some more time passes, so the first user expires
 	// no scaling is possible, because the second user still holds the last hosts for now
 	now = now.Add(5*time.Minute + 1*time.Second)
 	deployer.EXPECT().DeploymentsState(ctx).Return(currState, nil)
 	cont.DoMaintenance(ctx, now)
+	currUsage = []int{1, 0, 0, 1, 1}
 	assert.Equal(t, 1, storage.NumActiveUsers("master", now))
+	assert.Equal(t, currUsage, storage.Usage("master", now))
 
 	// the first user kicks in again, while the second is still alive
 	now = now.Add(1 * time.Minute)
@@ -153,18 +173,22 @@ func TestStatefulTwoUsers(t *testing.T) {
 			"k8cc-build-master3",
 		},
 	}
+	currUsage = []int{1, 1, 1, 2, 1}
 	assert.Equal(t, expLease, lease)
 	assert.Equal(t, 2, storage.NumActiveUsers("master", now))
+	assert.Equal(t, currUsage, storage.Usage("master", now))
 
 	// the second user now expires, so the deployment is scaled down
 	now = exp2.Add(1 * time.Second)
 	deployer.EXPECT().DeploymentsState(ctx).Return(currState, nil)
 	deployer.EXPECT().ScaleSet(ctx, "master", 4).Return(nil)
 	cont.DoMaintenance(ctx, now)
-	assert.Equal(t, 1, storage.NumActiveUsers("master", now))
 	currState = []kube.DeploymentState{
 		kube.DeploymentState{Tag: "master", Replicas: 4},
 	}
+	currUsage = []int{0, 1, 1, 1}
+	assert.Equal(t, 1, storage.NumActiveUsers("master", now))
+	assert.Equal(t, currUsage, storage.Usage("master", now))
 
 	// now also the first expires, so the set replicas goes to 0
 	now = exp1.Add(1 * time.Second)

@@ -14,6 +14,8 @@ type Storage interface {
 	GetLease(tag, user string) *time.Time
 	// SetLease sets a user's lease time for a specific tag
 	SetLease(tag, user string, expire time.Time, hosts []BuildHostID)
+	// RemoveLease removes a user lease if present
+	RemoveLease(tag, user string)
 	// NumActiveUsers returns the number of active users for a certain tag
 	NumActiveUsers(tag string, now time.Time) int
 	// Usage returns the number of users assigned to each build host, ordered by build host id
@@ -51,6 +53,15 @@ func (s *inMemoryStorage) SetLease(tag, user string, expire time.Time, hosts []B
 		s.tags[tag] = tagUsersLease{}
 	}
 	s.tags[tag][user] = userLeaseInfo{expire, hosts}
+}
+
+func (s *inMemoryStorage) RemoveLease(tag, user string) {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+
+	if tl, ok := s.tags[tag]; ok {
+		delete(tl, user)
+	}
 }
 
 func (s *inMemoryStorage) NumActiveUsers(tag string, now time.Time) int {

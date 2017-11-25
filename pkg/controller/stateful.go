@@ -72,13 +72,19 @@ type statefulTagController struct {
 }
 
 func (c statefulTagController) LeaseUser(ctx context.Context, user string, now time.Time) (Lease, error) {
+	// remove the possible previous user lease
+	c.storage.RemoveLease(c.tag, user)
+
 	// find the free host with the lowest id
 	usage := c.storage.Usage(c.tag, now)
 	assigned := len(usage) // default to the last (non-assigned) one
-	for id, n := range usage {
-		if n == 0 {
-			assigned = id
-			break
+	if len(usage) > 0 {
+		minUsage := usage[0]
+		for id, n := range usage {
+			if n < minUsage {
+				minUsage = n
+				assigned = id
+			}
 		}
 	}
 	hosts := make([]BuildHostID, c.opts.ReplicasPerUser)
