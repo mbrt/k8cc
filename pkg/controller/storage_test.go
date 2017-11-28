@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/mbrt/k8cc/pkg/data"
 )
 
 func TestStorageSingleUser(t *testing.T) {
@@ -13,7 +15,7 @@ func TestStorageSingleUser(t *testing.T) {
 	exp1 := now.Add(5 * time.Minute)
 
 	// first user
-	storage.SetLease("master", "mike", exp1, []BuildHostID{0, 1, 2})
+	storage.SetLease("master", "mike", exp1, []data.BuildHostID{0, 1, 2})
 	usage := storage.Usage("master", now)
 	assert.Equal(t, []int{1, 1, 1}, usage)
 
@@ -34,14 +36,14 @@ func TestStorageMultipleUsers(t *testing.T) {
 	exp1 := now.Add(5 * time.Minute)
 
 	// first user
-	storage.SetLease("master", "mike", exp1, []BuildHostID{0, 1, 2})
+	storage.SetLease("master", "mike", exp1, []data.BuildHostID{0, 1, 2})
 	usage := storage.Usage("master", now)
 	assert.Equal(t, []int{1, 1, 1}, usage)
 
 	// second user
 	now = now.Add(2 * time.Minute)
 	exp2 := now.Add(5 * time.Minute)
-	storage.SetLease("master", "alice", exp2, []BuildHostID{1, 2, 3})
+	storage.SetLease("master", "alice", exp2, []data.BuildHostID{1, 2, 3})
 	usage = storage.Usage("master", now)
 	assert.Equal(t, []int{1, 2, 2, 1}, usage)
 

@@ -2,16 +2,12 @@ package controller
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/go-kit/kit/log"
 
+	"github.com/mbrt/k8cc/pkg/data"
 	"github.com/mbrt/k8cc/pkg/kube"
-)
-
-var (
-	kubeServicePrefix = "k8cc-build"
 )
 
 // NewStatefulController creates a controller that uses StatefulSets to manage the build hosts
@@ -89,10 +85,10 @@ func (c statefulTagController) LeaseUser(ctx context.Context, user string, now t
 			}
 		}
 	}
-	hosts := make([]BuildHostID, c.opts.ReplicasPerUser)
+	hosts := make([]data.BuildHostID, c.opts.ReplicasPerUser)
 	for i := range hosts {
 		// we have to wrap around max replicas
-		hosts[i] = BuildHostID(assigned % c.opts.MaxReplicas)
+		hosts[i] = data.BuildHostID(assigned % c.opts.MaxReplicas)
 		assigned++
 	}
 
@@ -101,7 +97,7 @@ func (c statefulTagController) LeaseUser(ctx context.Context, user string, now t
 
 	hostnames := make([]string, len(hosts))
 	for i, id := range hosts {
-		hostnames[i] = fmt.Sprintf("%s-%s%d", kubeServicePrefix, c.tag, id)
+		hostnames[i] = kube.BuildHostname(c.tag, id)
 	}
 
 	nactive := c.storage.NumActiveUsers(c.tag, now)

@@ -16,13 +16,21 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+
+	"github.com/mbrt/k8cc/pkg/data"
 )
 
-var (
-	statefulSetLabel   = "k8cc.io/deploy-version"
-	buildTagLabel      = "k8cc.io/build-tag"
-	statefulSetVersion = "v1"
-	maxRetries         = 10
+const (
+	// ServicePrefix is the prefix for a build hostname
+	ServicePrefix = "k8cc-build"
+	// StatefulSetLabel is a label to identify the stateful sets managed by this controller
+	StatefulSetLabel = "k8cc.io/deploy-version"
+	// StatefulSetVersion is the version of the stateful sets
+	StatefulSetVersion = "v1"
+	// BuildTagLabel is the tag that identifies a certain build tag
+	BuildTagLabel = "k8cc.io/build-tag"
+	// MaxRetries is the maximal number of retries before to give up an update
+	MaxRetries = 10
 )
 
 // Deployer handles changing and querying kubernetes deployments
@@ -52,6 +60,11 @@ func NewKubeDeployer(ns string) (Deployer, error) {
 		return nil, errors.Wrap(err, "cannot create client")
 	}
 	return inClusterDeployer{clientset, ns}, nil
+}
+
+// BuildHostname returns the hostname for the given tag and host ID
+func BuildHostname(tag string, id data.BuildHostID) string {
+	return fmt.Sprintf("%s-%s%d", ServicePrefix, tag, id)
 }
 
 type inClusterDeployer struct {
@@ -103,7 +116,7 @@ func (d inClusterDeployer) ScaleSet(ctx context.Context, tag string, replicas in
 		// exhausting the apiserver, and add a limit/timeout on the retries to
 		// avoid getting stuck in this loop indefintiely.
 		retries++
-		if retries > maxRetries {
+		if retries > MaxRetries {
 			return errors.New("cannot update stateful set; max retries reached")
 		}
 		if err := limiter.Wait(ctx); err != nil {
@@ -120,7 +133,7 @@ func (d inClusterDeployer) DeploymentName(tag string) string {
 
 func (d inClusterDeployer) DeploymentsState(ctx context.Context) ([]DeploymentState, error) {
 	setsClient := d.clientset.AppsV1beta2().StatefulSets(d.namespace)
-	ls := labels.Set{statefulSetLabel: statefulSetVersion}
+	ls := labels.Set{StatefulSetLabel: StatefulSetVersion}
 	lsOptions := metav1.ListOptions{LabelSelector: ls.AsSelector().String()}
 	sets, err := setsClient.List(lsOptions)
 	if err != nil {
@@ -129,7 +142,7 @@ func (d inClusterDeployer) DeploymentsState(ctx context.Context) ([]DeploymentSt
 
 	result := []DeploymentState{}
 	for _, ss := range sets.Items {
-		tag, ok := ss.Spec.Template.Labels[buildTagLabel]
+		tag, ok := ss.Spec.Template.Labels[BuildTagLabel]
 		if !ok {
 			return nil, fmt.Errorf("missing build label from stateful set %s", ss.Name)
 		}
