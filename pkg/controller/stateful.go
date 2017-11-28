@@ -42,6 +42,7 @@ func (c statefulController) DoMaintenance(ctx context.Context, now time.Time) {
 		_ = c.logger.Log("stage", "maintenance", "err", err)
 	}
 	for _, ds := range states {
+		logger := log.With(c.logger, "stage", "maintenance", "tag", ds.Tag)
 		tagUsage := c.storage.Usage(ds.Tag, now)
 		// find the ID of the last used host in the tag
 		hostID := len(tagUsage) - 1
@@ -53,8 +54,9 @@ func (c statefulController) DoMaintenance(ctx context.Context, now time.Time) {
 		// scale back the replicas if they are unused
 		requiredReplicas := hostID + 1
 		if requiredReplicas != ds.Replicas {
+			_ = logger.Log("replicas", requiredReplicas)
 			if err = c.deployer.ScaleSet(ctx, ds.Tag, requiredReplicas); err != nil {
-				_ = c.logger.Log("stage", "maintenance", "err", err)
+				_ = logger.Log("err", err)
 			}
 		}
 	}
