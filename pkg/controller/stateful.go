@@ -10,10 +10,11 @@ import (
 	"github.com/mbrt/k8cc/pkg/kube"
 )
 
-// NewStatefulController creates a controller that uses StatefulSets to manage the build hosts
+// NewStatefulController creates a controller that uses StatefulSets to manage
+// the build hosts
 func NewStatefulController(
 	opts AutoScaleOptions,
-	storage Storage,
+	storage data.Storage,
 	deployer kube.Deployer,
 	logger log.Logger,
 ) Controller {
@@ -27,7 +28,7 @@ func NewStatefulController(
 
 type statefulController struct {
 	opts     AutoScaleOptions
-	storage  Storage
+	storage  data.Storage
 	deployer kube.Deployer
 	logger   log.Logger
 }
@@ -65,7 +66,7 @@ func (c statefulController) TagController(tag string) TagController {
 type statefulTagController struct {
 	tag      string
 	opts     AutoScaleOptions
-	storage  Storage
+	storage  data.Storage
 	deployer kube.Deployer
 }
 

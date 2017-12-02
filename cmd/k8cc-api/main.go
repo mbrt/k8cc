@@ -14,6 +14,7 @@ import (
 
 	"github.com/mbrt/k8cc/pkg/api"
 	"github.com/mbrt/k8cc/pkg/controller"
+	"github.com/mbrt/k8cc/pkg/data"
 	"github.com/mbrt/k8cc/pkg/kube"
 )
 
@@ -50,7 +51,7 @@ func main() {
 		LeaseTime:       time.Duration(*leaseTimeMinutes) * time.Minute,
 	}
 
-	storage := controller.NewInMemoryStorage()
+	storage := data.NewInMemoryStorage()
 	contr := controller.NewStatefulController(options, storage, deployer, log.With(logger, "component", "controller"))
 
 	var s api.Service

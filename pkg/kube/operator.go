@@ -1,11 +1,16 @@
 package kube
 
+// see https://github.com/kubernetes/community/blob/8cafef897a22026d42f5e5bb3f104febe7e29830/contributors/devel/controllers.md
+// and https://github.com/kubernetes/sample-controller/blob/master/controller.go
+// and https://github.com/kubernetes/kubernetes/blob/master/pkg/controller/podautoscaler/horizontal.go
+
 import (
 	"fmt"
 	"time"
 
 	"github.com/pkg/errors"
 	appsv1beta2 "k8s.io/api/apps/v1beta2"
+	kubeerr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -18,9 +23,10 @@ import (
 
 // Operator controls tag deployments as a regular Kubernetes operator
 type Operator struct {
-	kubeclientset     kubernetes.Interface
-	statefulsetLister appslisters.StatefulSetLister
-	statefulsetSynced cache.InformerSynced
+	kubeclientset        kubernetes.Interface
+	statefulsetLister    appslisters.StatefulSetLister
+	statefulsetSynced    cache.InformerSynced
+	desiredReplicasCache DesiredReplicasCache
 
 	// workqueue is a rate limited work queue. This is used to queue work to be
 	// processed instead of performing it as soon as a change happens. This
@@ -33,15 +39,17 @@ type Operator struct {
 // NewOperator creates a new operator
 func NewOperator(
 	kubeclientset kubernetes.Interface,
-	kubeInformerFactory kubeinformers.SharedInformerFactory) Operator {
-
+	kubeInformerFactory kubeinformers.SharedInformerFactory,
+	desiredReplicasCache DesiredReplicasCache,
+) Operator {
 	statefulsetInformer := kubeInformerFactory.Apps().V1beta2().StatefulSets()
 
 	operator := Operator{
-		kubeclientset:     kubeclientset,
-		statefulsetLister: statefulsetInformer.Lister(),
-		statefulsetSynced: statefulsetInformer.Informer().HasSynced,
-		workqueue:         workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "StatefulSets"),
+		kubeclientset:        kubeclientset,
+		statefulsetLister:    statefulsetInformer.Lister(),
+		statefulsetSynced:    statefulsetInformer.Informer().HasSynced,
+		desiredReplicasCache: desiredReplicasCache,
+		workqueue:            workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "k8cc-stateful-sets"),
 	}
 
 	// Set up an event handler for when StatefulSet resources change. This
@@ -150,7 +158,46 @@ func (c *Operator) processNextWorkItem() bool {
 // syncHandler compares the actual state with the desired, and attempts to
 // converge the two.
 func (c *Operator) syncHandler(key string) error {
-	return nil
+	// Convert the namespace/name string into a distinct namespace and name
+	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	if err != nil {
+		runtime.HandleError(fmt.Errorf("invalid resource key: %s", key))
+		return nil
+	}
+
+	// Get the stateful set resource with this namespace/name
+	statefulset, err := c.statefulsetLister.StatefulSets(namespace).Get(name)
+	if err != nil {
+		// The Foo resource may no longer exist, in which case we stop
+		// processing.
+		if kubeerr.IsNotFound(err) {
+			runtime.HandleError(fmt.Errorf("statefulset '%s' in work queue no longer exists", key))
+			return nil
+		}
+
+		return err
+	}
+
+	// get the tag from the labels
+	tag, ok := statefulset.Labels[StatefulSetLabel]
+	if !ok {
+		runtime.HandleError(fmt.Errorf("statefulset '%s' in work queue doesn't have required label", key))
+		return nil
+	}
+
+	desiredReplicas := c.desiredReplicasCache.DesiredReplicas(tag)
+	if desiredReplicas == statefulset.Status.Replicas {
+		// nothing to update
+		return nil
+
+	}
+
+	// copy the object, to avoid changing the shared cached one
+	// update the replicas
+	statefulset = statefulset.DeepCopy()
+	statefulset.Spec.Replicas = &desiredReplicas
+	_, err = c.kubeclientset.AppsV1beta2().StatefulSets(statefulset.Namespace).Update(statefulset)
+	return err
 }
 
 // enqueueStatefulSet takes a StatefulSet resource and converts it into a
@@ -190,4 +237,12 @@ func (c *Operator) handleObject(obj interface{}) {
 		// this object is controlled by us, enqueue it
 		c.enqueueStatefulSet(object)
 	}
+}
+
+// DesiredReplicasCache provides desired state information about the numebr of
+// desired replicas for a certain tag.
+type DesiredReplicasCache interface {
+	// DesiredReplicas returns the number of desired replicas for the
+	// stateful set associated with a tag
+	DesiredReplicas(tag string) int32
 }

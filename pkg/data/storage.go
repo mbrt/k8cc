@@ -1,10 +1,8 @@
-package controller
+package data
 
 import (
 	"sync"
 	"time"
-
-	"github.com/mbrt/k8cc/pkg/data"
 )
 
 // Storage stores user leases
@@ -12,7 +10,7 @@ type Storage interface {
 	// GetLease returns a user's lease time for a specific tag, if present, nil otherwise
 	GetLease(tag, user string) *time.Time
 	// SetLease sets a user's lease time for a specific tag
-	SetLease(tag, user string, expire time.Time, hosts []data.BuildHostID)
+	SetLease(tag, user string, expire time.Time, hosts []BuildHostID)
 	// RemoveLease removes a user lease if present
 	RemoveLease(tag, user string)
 	// NumActiveUsers returns the number of active users for a certain tag
@@ -44,7 +42,7 @@ func (s *inMemoryStorage) GetLease(tag, user string) *time.Time {
 	return nil
 }
 
-func (s *inMemoryStorage) SetLease(tag, user string, expire time.Time, hosts []data.BuildHostID) {
+func (s *inMemoryStorage) SetLease(tag, user string, expire time.Time, hosts []BuildHostID) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
@@ -88,7 +86,7 @@ type tagUsersLease map[string]userLeaseInfo
 
 type userLeaseInfo struct {
 	expiration time.Time
-	hosts      []data.BuildHostID
+	hosts      []BuildHostID
 }
 
 func (tl tagUsersLease) GetLease(user string) *time.Time {

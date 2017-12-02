@@ -8,6 +8,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/mbrt/k8cc/pkg/data"
 	"github.com/mbrt/k8cc/pkg/kube"
 	kubemock "github.com/mbrt/k8cc/pkg/kube/mock"
 )
@@ -27,7 +28,7 @@ func TestStatefulSingleUser(t *testing.T) {
 		ReplicasPerUser: 3,
 		LeaseTime:       10 * time.Minute,
 	}
-	storage := NewInMemoryStorage()
+	storage := data.NewInMemoryStorage()
 	cont := NewStatefulController(opts, storage, deployer, logger).(statefulController)
 	tagController := cont.TagController("master")
 
@@ -99,7 +100,7 @@ func TestStatefulTwoUsers(t *testing.T) {
 		ReplicasPerUser: 3,
 		LeaseTime:       10 * time.Minute,
 	}
-	storage := NewInMemoryStorage()
+	storage := data.NewInMemoryStorage()
 	cont := NewStatefulController(opts, storage, deployer, logger).(statefulController)
 	tagController := cont.TagController("master")
 
