@@ -8,31 +8,33 @@ import (
 
 	"github.com/mbrt/k8cc/pkg/data"
 	"github.com/mbrt/k8cc/pkg/kube"
+	"github.com/mbrt/k8cc/pkg/state"
 )
 
 // NewStatefulController creates a controller that uses StatefulSets to manage
 // the build hosts
 func NewStatefulController(
 	opts AutoScaleOptions,
-	storage data.Storage,
+	tagsState state.TagsStater,
 	deployer kube.Deployer,
 	logger log.Logger,
 ) Controller {
 	return statefulController{
 		opts,
-		storage,
+		tagsState,
 		deployer,
 		logger,
 	}
 }
 
 type statefulController struct {
-	opts     AutoScaleOptions
-	storage  data.Storage
-	deployer kube.Deployer
-	logger   log.Logger
+	opts      AutoScaleOptions
+	tagsState state.TagsStater
+	deployer  kube.Deployer
+	logger    log.Logger
 }
 
+// TODO: REMOVE
 func (c statefulController) DoMaintenance(ctx context.Context, now time.Time) {
 	states, err := c.deployer.DeploymentsState(ctx)
 	if err != nil {
@@ -40,7 +42,7 @@ func (c statefulController) DoMaintenance(ctx context.Context, now time.Time) {
 	}
 	for _, ds := range states {
 		logger := log.With(c.logger, "stage", "maintenance", "tag", ds.Tag)
-		tagUsage := c.storage.Usage(ds.Tag, now)
+		tagUsage := c.tagsState.TagState(ds.Tag).HostsUsage(now)
 		// find the ID of the last used host in the tag
 		hostID := len(tagUsage) - 1
 		for ; hostID >= 0; hostID-- {
@@ -59,23 +61,22 @@ func (c statefulController) DoMaintenance(ctx context.Context, now time.Time) {
 	}
 }
 
-func (c statefulController) TagController(tag string) TagController {
-	return statefulTagController{tag, c.opts, c.storage, c.deployer}
+func (c statefulController) TagController(tag data.Tag) TagController {
+	return statefulTagController{tag, c.opts, c.tagsState}
 }
 
 type statefulTagController struct {
-	tag      string
-	opts     AutoScaleOptions
-	storage  data.Storage
-	deployer kube.Deployer
+	tag       data.Tag
+	opts      AutoScaleOptions
+	tagsState state.TagsStater
 }
 
-func (c statefulTagController) LeaseUser(ctx context.Context, user string, now time.Time) (Lease, error) {
+func (c statefulTagController) LeaseUser(ctx context.Context, user data.User, now time.Time) (Lease, error) {
 	// remove the possible previous user lease
-	c.storage.RemoveLease(c.tag, user)
+	c.tagsState.TagState(c.tag).RemoveLease(user)
 
 	// find the free host with the lowest id
-	usage := c.storage.Usage(c.tag, now)
+	usage := c.tagsState.TagState(c.tag).HostsUsage(now)
 	assigned := len(usage) // default to the last (non-assigned) one
 	if len(usage) > 0 {
 		minUsage := usage[0]
@@ -86,40 +87,37 @@ func (c statefulTagController) LeaseUser(ctx context.Context, user string, now t
 			}
 		}
 	}
-	hosts := make([]data.BuildHostID, c.opts.ReplicasPerUser)
+	hosts := make([]data.HostID, c.opts.ReplicasPerUser)
 	for i := range hosts {
 		// we have to wrap around max replicas
-		hosts[i] = data.BuildHostID(assigned % c.opts.MaxReplicas)
+		hosts[i] = data.HostID(assigned % c.opts.MaxReplicas)
 		assigned++
 	}
 
 	t := now.Add(c.opts.LeaseTime)
-	c.storage.SetLease(c.tag, user, t, hosts)
+	c.tagsState.TagState(c.tag).SetLease(user, t, hosts)
 
 	hostnames := make([]string, len(hosts))
 	for i, id := range hosts {
 		hostnames[i] = kube.BuildHostname(c.tag, id)
 	}
 
-	nactive := c.storage.NumActiveUsers(c.tag, now)
-	replicas := c.computeReplicas(nactive)
-	err := c.deployer.ScaleSet(ctx, c.tag, replicas)
-
 	result := Lease{
 		Expiration: t,
 		Hosts:      hostnames,
 	}
-	return result, err
+	return result, nil
 }
 
-func (c *statefulTagController) computeReplicas(numUsers int) int {
-	ideal := numUsers * c.opts.ReplicasPerUser
-	switch {
-	case ideal < c.opts.MinReplicas:
-		return c.opts.MinReplicas
-	case ideal > c.opts.MaxReplicas:
-		return c.opts.MaxReplicas
-	default:
-		return ideal
+func (c statefulTagController) DesiredReplicas(now time.Time) int {
+	tagUsage := c.tagsState.TagState(c.tag).HostsUsage(now)
+	// find the ID of the last used host in the tag
+	hostID := len(tagUsage) - 1
+	for ; hostID >= 0; hostID-- {
+		if tagUsage[hostID] > 0 {
+			break
+		}
 	}
+	// the number of replicas needs to contain the last assigned host
+	return hostID + 1
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/mbrt/k8cc/pkg/controller"
+	"github.com/mbrt/k8cc/pkg/data"
 	"github.com/mbrt/k8cc/pkg/kube"
 )
 
@@ -17,7 +18,7 @@ var (
 
 // Service is an interface that implements all the APIs.
 type Service interface {
-	LeaseUser(ctx context.Context, user, tag string) (Lease, error)
+	LeaseUser(ctx context.Context, u data.User, t data.Tag) (Lease, error)
 }
 
 // NewService creates the API service
@@ -36,8 +37,8 @@ type service struct {
 	controller controller.Controller
 }
 
-func (s service) LeaseUser(ctx context.Context, user, tag string) (Lease, error) {
-	lease, err := s.controller.TagController(tag).LeaseUser(ctx, user, time.Now())
+func (s service) LeaseUser(ctx context.Context, u data.User, t data.Tag) (Lease, error) {
+	lease, err := s.controller.TagController(t).LeaseUser(ctx, u, time.Now())
 	result := Lease{
 		Expiration: lease.Expiration,
 		Hosts:      lease.Hosts,

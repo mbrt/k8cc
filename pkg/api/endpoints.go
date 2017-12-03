@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/go-kit/kit/endpoint"
+
+	"github.com/mbrt/k8cc/pkg/data"
 )
 
 // Endpoints collects all the api endpoints in a single struct
@@ -22,7 +24,7 @@ func MakeEndpoints(s Service) Endpoints {
 func MakePutLeaseUserEndpoint(s Service) endpoint.Endpoint {
 	return func(ctx context.Context, request interface{}) (response interface{}, err error) {
 		req := request.(putLeaseUserRequest)
-		t, err := s.LeaseUser(ctx, req.User, req.Tag)
+		t, err := s.LeaseUser(ctx, data.User(req.User), data.Tag(req.Tag))
 		return putLeaseUserResponse{t, err}, nil
 	}
 }

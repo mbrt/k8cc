@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/go-kit/kit/log"
+
+	"github.com/mbrt/k8cc/pkg/data"
 )
 
 // Middleware describes a service (as opposed to endpoint) middleware.
@@ -25,12 +27,12 @@ type loggingMiddleware struct {
 	logger log.Logger
 }
 
-func (mw loggingMiddleware) LeaseUser(ctx context.Context, user, tag string) (r Lease, err error) {
+func (mw loggingMiddleware) LeaseUser(ctx context.Context, u data.User, t data.Tag) (r Lease, err error) {
 	defer func(begin time.Time) {
-		lerr := mw.logger.Log("method", "LeaseUser", "user", user, "tag", tag, "took", time.Since(begin), "err", err)
+		lerr := mw.logger.Log("method", "LeaseUser", "user", u, "tag", t, "took", time.Since(begin), "err", err)
 		if err != nil {
 			err = lerr
 		}
 	}(time.Now())
-	return mw.next.LeaseUser(ctx, user, tag)
+	return mw.next.LeaseUser(ctx, u, t)
 }

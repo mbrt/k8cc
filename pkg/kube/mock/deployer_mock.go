@@ -7,6 +7,7 @@ package mock_kube
 import (
 	context "context"
 	gomock "github.com/golang/mock/gomock"
+	data "github.com/mbrt/k8cc/pkg/data"
 	kube "github.com/mbrt/k8cc/pkg/kube"
 	reflect "reflect"
 )
@@ -35,7 +36,7 @@ func (m *MockDeployer) EXPECT() *MockDeployerMockRecorder {
 }
 
 // DeploymentName mocks base method
-func (m *MockDeployer) DeploymentName(arg0 string) string {
+func (m *MockDeployer) DeploymentName(arg0 data.Tag) string {
 	ret := m.ctrl.Call(m, "DeploymentName", arg0)
 	ret0, _ := ret[0].(string)
 	return ret0
@@ -60,7 +61,7 @@ func (mr *MockDeployerMockRecorder) DeploymentsState(arg0 interface{}) *gomock.C
 }
 
 // ScaleSet mocks base method
-func (m *MockDeployer) ScaleSet(arg0 context.Context, arg1 string, arg2 int) error {
+func (m *MockDeployer) ScaleSet(arg0 context.Context, arg1 data.Tag, arg2 int) error {
 	ret := m.ctrl.Call(m, "ScaleSet", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0

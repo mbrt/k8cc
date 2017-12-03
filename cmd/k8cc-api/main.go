@@ -14,8 +14,8 @@ import (
 
 	"github.com/mbrt/k8cc/pkg/api"
 	"github.com/mbrt/k8cc/pkg/controller"
-	"github.com/mbrt/k8cc/pkg/data"
 	"github.com/mbrt/k8cc/pkg/kube"
+	"github.com/mbrt/k8cc/pkg/state"
 )
 
 func main() {
@@ -51,8 +51,8 @@ func main() {
 		LeaseTime:       time.Duration(*leaseTimeMinutes) * time.Minute,
 	}
 
-	storage := data.NewInMemoryStorage()
-	contr := controller.NewStatefulController(options, storage, deployer, log.With(logger, "component", "controller"))
+	tagstate := state.NewInMemoryState()
+	contr := controller.NewStatefulController(options, tagstate, deployer, log.With(logger, "component", "controller"))
 
 	var s api.Service
 	{

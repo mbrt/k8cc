@@ -179,8 +179,9 @@ func (c *Operator) syncHandler(key string) error {
 	}
 
 	// get the tag from the labels
-	tag, ok := statefulset.Labels[StatefulSetLabel]
-	if !ok {
+	var tag string
+	var ok bool
+	if tag, ok = statefulset.Labels[StatefulSetLabel]; !ok {
 		runtime.HandleError(fmt.Errorf("statefulset '%s' in work queue doesn't have required label", key))
 		return nil
 	}

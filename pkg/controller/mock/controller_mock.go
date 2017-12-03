@@ -8,6 +8,7 @@ import (
 	context "context"
 	gomock "github.com/golang/mock/gomock"
 	controller "github.com/mbrt/k8cc/pkg/controller"
+	data "github.com/mbrt/k8cc/pkg/data"
 	reflect "reflect"
 	time "time"
 )
@@ -46,7 +47,7 @@ func (mr *MockControllerMockRecorder) DoMaintenance(arg0, arg1 interface{}) *gom
 }
 
 // TagController mocks base method
-func (m *MockController) TagController(arg0 string) controller.TagController {
+func (m *MockController) TagController(arg0 data.Tag) controller.TagController {
 	ret := m.ctrl.Call(m, "TagController", arg0)
 	ret0, _ := ret[0].(controller.TagController)
 	return ret0
@@ -80,8 +81,20 @@ func (m *MockTagController) EXPECT() *MockTagControllerMockRecorder {
 	return m.recorder
 }
 
+// DesiredReplicas mocks base method
+func (m *MockTagController) DesiredReplicas(arg0 time.Time) int {
+	ret := m.ctrl.Call(m, "DesiredReplicas", arg0)
+	ret0, _ := ret[0].(int)
+	return ret0
+}
+
+// DesiredReplicas indicates an expected call of DesiredReplicas
+func (mr *MockTagControllerMockRecorder) DesiredReplicas(arg0 interface{}) *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DesiredReplicas", reflect.TypeOf((*MockTagController)(nil).DesiredReplicas), arg0)
+}
+
 // LeaseUser mocks base method
-func (m *MockTagController) LeaseUser(arg0 context.Context, arg1 string, arg2 time.Time) (controller.Lease, error) {
+func (m *MockTagController) LeaseUser(arg0 context.Context, arg1 data.User, arg2 time.Time) (controller.Lease, error) {
 	ret := m.ctrl.Call(m, "LeaseUser", arg0, arg1, arg2)
 	ret0, _ := ret[0].(controller.Lease)
 	ret1, _ := ret[1].(error)

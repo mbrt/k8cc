@@ -36,16 +36,16 @@ const (
 // Deployer handles changing and querying kubernetes deployments
 type Deployer interface {
 	// DeploymentName returns the name of the deployment that serves the given tag.
-	DeploymentName(tag string) string
+	DeploymentName(tag data.Tag) string
 	// ScaleSet scales a stateful set to the given replica count
-	ScaleSet(ctx context.Context, tag string, replicas int) error
-	// DeploymentsState retuns the state of all controlled deployments
+	ScaleSet(ctx context.Context, tag data.Tag, replicas int) error
+	// DeploymentsState returns the state of all controlled deployments
 	DeploymentsState(ctx context.Context) ([]DeploymentState, error)
 }
 
 // DeploymentState contains the state of the deployment for a tag
 type DeploymentState struct {
-	Tag      string
+	Tag      data.Tag
 	Replicas int
 }
 
@@ -63,7 +63,7 @@ func NewKubeDeployer(ns string) (Deployer, error) {
 }
 
 // BuildHostname returns the hostname for the given tag and host ID
-func BuildHostname(tag string, id data.BuildHostID) string {
+func BuildHostname(tag data.Tag, id data.HostID) string {
 	return fmt.Sprintf("%s-%s%d", ServicePrefix, tag, id)
 }
 
@@ -72,7 +72,7 @@ type inClusterDeployer struct {
 	namespace string
 }
 
-func (d inClusterDeployer) ScaleSet(ctx context.Context, tag string, replicas int) error {
+func (d inClusterDeployer) ScaleSet(ctx context.Context, tag data.Tag, replicas int) error {
 	setsClient := d.clientset.AppsV1beta2().StatefulSets(d.namespace)
 	setName := d.DeploymentName(tag)
 	set, err := setsClient.Get(setName, metav1.GetOptions{})
@@ -127,7 +127,7 @@ func (d inClusterDeployer) ScaleSet(ctx context.Context, tag string, replicas in
 	return nil
 }
 
-func (d inClusterDeployer) DeploymentName(tag string) string {
+func (d inClusterDeployer) DeploymentName(tag data.Tag) string {
 	return fmt.Sprintf("k8cc-build-%s", tag)
 }
 
@@ -147,7 +147,7 @@ func (d inClusterDeployer) DeploymentsState(ctx context.Context) ([]DeploymentSt
 			return nil, fmt.Errorf("missing build label from stateful set %s", ss.Name)
 		}
 		replicas := ss.Status.Replicas
-		result = append(result, DeploymentState{tag, int(replicas)})
+		result = append(result, DeploymentState{data.Tag(tag), int(replicas)})
 	}
 
 	return result, nil
