@@ -34,33 +34,6 @@ type statefulController struct {
 	logger    log.Logger
 }
 
-// TODO: REMOVE
-func (c statefulController) DoMaintenance(ctx context.Context, now time.Time) {
-	states, err := c.deployer.DeploymentsState(ctx)
-	if err != nil {
-		_ = c.logger.Log("stage", "maintenance", "err", err)
-	}
-	for _, ds := range states {
-		logger := log.With(c.logger, "stage", "maintenance", "tag", ds.Tag)
-		tagUsage := c.tagsState.TagState(ds.Tag).HostsUsage(now)
-		// find the ID of the last used host in the tag
-		hostID := len(tagUsage) - 1
-		for ; hostID >= 0; hostID-- {
-			if tagUsage[hostID] > 0 {
-				break
-			}
-		}
-		// scale back the replicas if they are unused
-		requiredReplicas := hostID + 1
-		if requiredReplicas != ds.Replicas {
-			_ = logger.Log("replicas", requiredReplicas)
-			if err = c.deployer.ScaleSet(ctx, ds.Tag, requiredReplicas); err != nil {
-				_ = logger.Log("err", err)
-			}
-		}
-	}
-}
-
 func (c statefulController) TagController(tag data.Tag) TagController {
 	return statefulTagController{tag, c.opts, c.tagsState}
 }

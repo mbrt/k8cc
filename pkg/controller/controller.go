@@ -11,8 +11,6 @@ import (
 
 // Controller manages the scaling of all the controlled deployments
 type Controller interface {
-	// DoMaintenance takes care of scaling the deployments based on the active users
-	DoMaintenance(ctx context.Context, now time.Time)
 	// TagController returns the controller for the given tag
 	TagController(t data.Tag) TagController
 }
@@ -37,4 +35,16 @@ type AutoScaleOptions struct {
 	MaxReplicas     int
 	ReplicasPerUser int
 	LeaseTime       time.Duration
+}
+
+// DesiredReplicasAdapter adapts a controller to the DesiredReplicasCache
+// interface required by kube.Operator
+type DesiredReplicasAdapter struct {
+	controller Controller
+}
+
+// DesiredReplicas is the adapter method for DesiredReplicasCache interface
+func (a DesiredReplicasAdapter) DesiredReplicas(t data.Tag) int32 {
+	r := a.controller.TagController(t).DesiredReplicas(time.Now())
+	return int32(r)
 }

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"net/http"
@@ -26,7 +25,6 @@ func main() {
 		maxReplicas      = flag.Int("scale.max-replicas", 10, "Maximum number of replicas")
 		replicasPerUser  = flag.Int("scale.replicas-per-user", 5, "Number of replicas per active user")
 		leaseTimeMinutes = flag.Int("user.lease-time", 15, "Lease time for users in minutes")
-		updateSleep      = flag.Int("controller.update-interval", 10, "Update interval of the controller")
 	)
 	flag.Parse()
 
@@ -76,16 +74,6 @@ func main() {
 		/* #nosec */
 		_ = logger.Log("transport", "HTTP", "addr", *httpAddr)
 		errs <- http.ListenAndServe(*httpAddr, h)
-	}()
-
-	go func() {
-		interval := time.Duration(*updateSleep) * time.Second
-		ctx := context.Background()
-
-		for {
-			time.Sleep(interval)
-			contr.DoMaintenance(ctx, time.Now())
-		}
 	}()
 
 	/* #nosec */

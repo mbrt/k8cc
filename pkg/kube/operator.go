@@ -12,6 +12,7 @@ import (
 	appsv1beta2 "k8s.io/api/apps/v1beta2"
 	kubeerr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	kubeinformers "k8s.io/client-go/informers"
@@ -19,10 +20,12 @@ import (
 	appslisters "k8s.io/client-go/listers/apps/v1beta2"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
+
+	"github.com/mbrt/k8cc/pkg/data"
 )
 
-// Operator controls tag deployments as a regular Kubernetes operator
-type Operator struct {
+// operator controls tag deployments as a regular Kubernetes operator
+type operator struct {
 	kubeclientset        kubernetes.Interface
 	statefulsetLister    appslisters.StatefulSetLister
 	statefulsetSynced    cache.InformerSynced
@@ -44,7 +47,7 @@ func NewOperator(
 ) Operator {
 	statefulsetInformer := kubeInformerFactory.Apps().V1beta2().StatefulSets()
 
-	operator := Operator{
+	op := operator{
 		kubeclientset:        kubeclientset,
 		statefulsetLister:    statefulsetInformer.Lister(),
 		statefulsetSynced:    statefulsetInformer.Informer().HasSynced,
@@ -57,7 +60,7 @@ func NewOperator(
 	// resources. More info on this pattern:
 	// https://github.com/kubernetes/community/blob/8cafef897a22026d42f5e5bb3f104febe7e29830/contributors/devel/controllers.md
 	statefulsetInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: operator.handleObject,
+		AddFunc: op.handleObject,
 		UpdateFunc: func(old, new interface{}) {
 			newSet := new.(*appsv1beta2.StatefulSet)
 			oldSet := old.(*appsv1beta2.StatefulSet)
@@ -66,19 +69,19 @@ func NewOperator(
 				// Two different versions of the same StatefulSet will always have different RVs.
 				return
 			}
-			operator.handleObject(new)
+			op.handleObject(new)
 		},
-		DeleteFunc: operator.handleObject,
+		DeleteFunc: op.handleObject,
 	})
 
-	return operator
+	return &op
 }
 
 // Run will set up the event handlers for types we are interested in, as well
 // as syncing informer caches and starting workers. It will block until stopCh
 // is closed, at which point it will shutdown the workqueue and wait for
 // workers to finish processing their current work items.
-func (c *Operator) Run(threadiness int, stopCh <-chan struct{}) error {
+func (c *operator) Run(threadiness int, stopCh <-chan struct{}) error {
 	defer runtime.HandleCrash()
 	defer c.workqueue.ShutDown()
 
@@ -95,17 +98,50 @@ func (c *Operator) Run(threadiness int, stopCh <-chan struct{}) error {
 	return nil
 }
 
+func (c *operator) NotifyUpdated(t data.Tag) error {
+	ls := labels.Set{BuildTagLabel: string(t)}
+	sets, err := c.statefulsetLister.List(ls.AsSelector())
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("error listing the stateful set related to tag %s", t))
+	}
+	for _, s := range sets {
+		c.enqueueStatefulSet(s)
+	}
+	return nil
+}
+
+func (c *operator) Hostnames(t data.Tag, ids []data.HostID) ([]string, error) {
+	ls := labels.Set{BuildTagLabel: string(t)}
+	sets, err := c.statefulsetLister.List(ls.AsSelector())
+	if err != nil {
+		return nil, errors.Wrap(err, fmt.Sprintf("error listing the stateful set related to tag %s", t))
+	}
+	if len(sets) == 0 {
+		return nil, errors.New("no related stateful set has been found")
+	}
+
+	// TODO which namespace??
+	set := sets[0]
+	pn := set.Spec.Template.Name
+	sn := set.Spec.ServiceName
+	r := make([]string, len(ids))
+	for i, id := range ids {
+		r[i] = fmt.Sprintf("%s-%d.%s", pn, id, sn)
+	}
+	return r, nil
+}
+
 // runWorker is a long-running function that will continually call the
 // processNextWorkItem function in order to read and process a message on the
 // workqueue.
-func (c *Operator) runWorker() {
+func (c *operator) runWorker() {
 	for c.processNextWorkItem() {
 	}
 }
 
 // processNextWorkItem will read a single work item off the workqueue and
 // attempt to process it, by calling the syncHandler.
-func (c *Operator) processNextWorkItem() bool {
+func (c *operator) processNextWorkItem() bool {
 	obj, shutdown := c.workqueue.Get()
 
 	if shutdown {
@@ -157,7 +193,7 @@ func (c *Operator) processNextWorkItem() bool {
 
 // syncHandler compares the actual state with the desired, and attempts to
 // converge the two.
-func (c *Operator) syncHandler(key string) error {
+func (c *operator) syncHandler(key string) error {
 	// Convert the namespace/name string into a distinct namespace and name
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
@@ -186,7 +222,7 @@ func (c *Operator) syncHandler(key string) error {
 		return nil
 	}
 
-	desiredReplicas := c.desiredReplicasCache.DesiredReplicas(tag)
+	desiredReplicas := c.desiredReplicasCache.DesiredReplicas(data.Tag(tag))
 	if desiredReplicas == statefulset.Status.Replicas {
 		// nothing to update
 		return nil
@@ -204,7 +240,7 @@ func (c *Operator) syncHandler(key string) error {
 // enqueueStatefulSet takes a StatefulSet resource and converts it into a
 // namespace/name string which is then put onto the work queue. This method
 // should *not* be passed resources of any type other than StatefulSet.
-func (c *Operator) enqueueStatefulSet(obj interface{}) {
+func (c *operator) enqueueStatefulSet(obj interface{}) {
 	var key string
 	var err error
 	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
@@ -219,7 +255,7 @@ func (c *Operator) enqueueStatefulSet(obj interface{}) {
 // objects metadata.ownerReferences field for an appropriate OwnerReference.
 // It then enqueues that Foo resource to be processed. If the object does not
 // have an appropriate OwnerReference, it will simply be skipped.
-func (c *Operator) handleObject(obj interface{}) {
+func (c *operator) handleObject(obj interface{}) {
 	var object metav1.Object
 	var ok bool
 	if object, ok = obj.(metav1.Object); !ok {
@@ -240,10 +276,9 @@ func (c *Operator) handleObject(obj interface{}) {
 	}
 }
 
-// DesiredReplicasCache provides desired state information about the numebr of
-// desired replicas for a certain tag.
+// DesiredReplicasCache provides the numebr of desired replicas for a certain tag
 type DesiredReplicasCache interface {
 	// DesiredReplicas returns the number of desired replicas for the
 	// stateful set associated with a tag
-	DesiredReplicas(tag string) int32
+	DesiredReplicas(t data.Tag) int32
 }
