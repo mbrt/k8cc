@@ -12,3 +12,7 @@
 
 # executables
 /k8cc-api
+
+# editor ignores
+*.swp
+.#*

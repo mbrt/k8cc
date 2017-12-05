@@ -36,16 +36,6 @@ func (m *MockController) EXPECT() *MockControllerMockRecorder {
 	return m.recorder
 }
 
-// DoMaintenance mocks base method
-func (m *MockController) DoMaintenance(arg0 context.Context, arg1 time.Time) {
-	m.ctrl.Call(m, "DoMaintenance", arg0, arg1)
-}
-
-// DoMaintenance indicates an expected call of DoMaintenance
-func (mr *MockControllerMockRecorder) DoMaintenance(arg0, arg1 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DoMaintenance", reflect.TypeOf((*MockController)(nil).DoMaintenance), arg0, arg1)
-}
-
 // TagController mocks base method
 func (m *MockController) TagController(arg0 data.Tag) controller.TagController {
 	ret := m.ctrl.Call(m, "TagController", arg0)

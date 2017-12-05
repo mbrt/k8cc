@@ -19,6 +19,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	appslisters "k8s.io/client-go/listers/apps/v1beta2"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/workqueue"
 
 	"github.com/mbrt/k8cc/pkg/data"
@@ -39,8 +40,23 @@ type operator struct {
 	workqueue workqueue.RateLimitingInterface
 }
 
-// NewOperator creates a new operator
-func NewOperator(
+// NewOperator creates an Operator using default the given settings for the kube connection.
+//
+// If kubecfg and masterURL are empty, defaults to in-cluster configuration
+func NewOperator(masterURL, kubecfg string, drc DesiredReplicasCache) (Operator, error) {
+	cfg, err := clientcmd.BuildConfigFromFlags(masterURL, kubecfg)
+	if err != nil {
+		return nil, err
+	}
+	kubeClient, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, time.Second*30)
+	return newOperator(kubeClient, kubeInformerFactory, drc), nil
+}
+
+func newOperator(
 	kubeclientset kubernetes.Interface,
 	kubeInformerFactory kubeinformers.SharedInformerFactory,
 	desiredReplicasCache DesiredReplicasCache,

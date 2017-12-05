@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/go-kit/kit/log"
+	"github.com/pkg/errors"
 
 	"github.com/mbrt/k8cc/pkg/data"
 	"github.com/mbrt/k8cc/pkg/kube"
@@ -16,13 +17,13 @@ import (
 func NewStatefulController(
 	opts AutoScaleOptions,
 	tagsState state.TagsStater,
-	deployer kube.Deployer,
+	hostnamer kube.Hostnamer,
 	logger log.Logger,
 ) Controller {
 	return statefulController{
 		opts,
 		tagsState,
-		deployer,
+		hostnamer,
 		logger,
 	}
 }
@@ -30,18 +31,19 @@ func NewStatefulController(
 type statefulController struct {
 	opts      AutoScaleOptions
 	tagsState state.TagsStater
-	deployer  kube.Deployer
+	hostnamer kube.Hostnamer
 	logger    log.Logger
 }
 
 func (c statefulController) TagController(tag data.Tag) TagController {
-	return statefulTagController{tag, c.opts, c.tagsState}
+	return statefulTagController{tag, c.opts, c.tagsState, c.hostnamer}
 }
 
 type statefulTagController struct {
 	tag       data.Tag
 	opts      AutoScaleOptions
 	tagsState state.TagsStater
+	hostnamer kube.Hostnamer
 }
 
 func (c statefulTagController) LeaseUser(ctx context.Context, user data.User, now time.Time) (Lease, error) {
@@ -70,11 +72,10 @@ func (c statefulTagController) LeaseUser(ctx context.Context, user data.User, no
 	t := now.Add(c.opts.LeaseTime)
 	c.tagsState.TagState(c.tag).SetLease(user, t, hosts)
 
-	hostnames := make([]string, len(hosts))
-	for i, id := range hosts {
-		hostnames[i] = kube.BuildHostname(c.tag, id)
+	hostnames, err := c.hostnamer.Hostnames(c.tag, hosts)
+	if err != nil {
+		return Lease{}, errors.Wrap(err, "error getting hostnames for build hosts")
 	}
-
 	result := Lease{
 		Expiration: t,
 		Hosts:      hostnames,

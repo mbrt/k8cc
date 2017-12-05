@@ -8,7 +8,6 @@ import (
 
 	"github.com/mbrt/k8cc/pkg/controller"
 	"github.com/mbrt/k8cc/pkg/data"
-	"github.com/mbrt/k8cc/pkg/kube"
 )
 
 var (
@@ -22,8 +21,8 @@ type Service interface {
 }
 
 // NewService creates the API service
-func NewService(d kube.Deployer, c controller.Controller) Service {
-	return service{d, c}
+func NewService(c controller.Controller) Service {
+	return service{c}
 }
 
 // Lease contains info about a lease for a specific user and tag
@@ -33,7 +32,6 @@ type Lease struct {
 }
 
 type service struct {
-	dep        kube.Deployer
 	controller controller.Controller
 }
 
