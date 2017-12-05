@@ -4,6 +4,7 @@ metadata:
   name: k8cc-build-master
   labels:
     k8cc.io/deploy-version: v1
+    k8cc.io/build-tag: master
 spec:
   serviceName: k8cc-build-master
   podManagementPolicy: Parallel
@@ -16,11 +17,12 @@ spec:
         k8cc.io/build-tag: master
     spec:
       containers:
-      - name: k8cc-build-master-distcc
-        image: my-registry.com/distcc-master
+      - name: distcc
+        image: mbrt/distcc-ubuntu
         args:
+          - "distccd"
           - "--allow"
-          - "172.29.0.0/16"  # set this to the pod network
+          - "10.0.0.0/8"  # set this to the pod network
           - "--no-detach"
           - "--log-stderr"
         ports:

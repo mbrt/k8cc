@@ -1,9 +1,9 @@
-FROM centos:7
+FROM ubuntu:16.04
 
-USER root
-RUN yum install -y --nogpg distcc distcc-server gcc && \
-    yum clean all
+RUN apt update                    && \
+    apt install -y gcc g++ distcc && \
+    apt clean                     && \
+    rm -rf /var/cache/apt
 
 RUN useradd distcc
-ENV DISTCCD_PATH=/cm/local/apps/gcc/6.3.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-COMMAND ["distccd"]
+CMD ["distccd"]

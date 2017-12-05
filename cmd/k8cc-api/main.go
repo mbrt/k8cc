@@ -43,7 +43,7 @@ func main() {
 		LeaseTime:       time.Duration(*leaseTimeMinutes) * time.Minute,
 	}
 
-	adapter := controller.Adapter{}
+	adapter := &controller.Adapter{}
 	tagstate := state.NewInMemoryState()
 	contr := controller.NewStatefulController(options, tagstate, adapter, log.With(logger, "component", "controller"))
 
