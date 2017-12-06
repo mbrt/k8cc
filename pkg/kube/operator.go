@@ -133,16 +133,14 @@ func (c *operator) Hostnames(t data.Tag, ids []data.HostID) ([]string, error) {
 		return nil, errors.Wrap(err, fmt.Sprintf("error listing the stateful set related to tag %s", t))
 	}
 	if len(sets) == 0 {
-		return nil, errors.New("no related stateful set has been found")
+		return nil, fmt.Errorf("no stateful set found for tag %s", t)
 	}
 
 	// TODO which namespace??
 	set := sets[0]
-	pn := set.Spec.Template.Name
-	sn := set.Spec.ServiceName
 	r := make([]string, len(ids))
 	for i, id := range ids {
-		r[i] = fmt.Sprintf("%s-%d.%s", pn, id, sn)
+		r[i] = fmt.Sprintf("%s-%d.%s", set.Spec.Template.Name, id, set.Spec.ServiceName)
 	}
 	return r, nil
 }

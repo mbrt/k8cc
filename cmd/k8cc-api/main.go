@@ -60,7 +60,7 @@ func main() {
 
 	var s api.Service
 	{
-		s = api.NewService(contr)
+		s = api.NewService(contr, operator)
 		s = api.LoggingMiddleware(logger)(s)
 	}
 

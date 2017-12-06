@@ -30,7 +30,7 @@ type loggingMiddleware struct {
 func (mw loggingMiddleware) LeaseUser(ctx context.Context, u data.User, t data.Tag) (r Lease, err error) {
 	defer func(begin time.Time) {
 		lerr := mw.logger.Log("method", "LeaseUser", "user", u, "tag", t, "took", time.Since(begin), "err", err)
-		if err != nil {
+		if err == nil {
 			err = lerr
 		}
 	}(time.Now())

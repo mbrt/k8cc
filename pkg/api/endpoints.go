@@ -38,3 +38,5 @@ type putLeaseUserResponse struct {
 	Lease Lease `json:"lease,omitempty"`
 	Err   error `json:"error,omitempty"`
 }
+
+func (r putLeaseUserResponse) error() error { return r.Err }
