@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-kit/kit/log"
 	"github.com/pkg/errors"
 	appsv1beta2 "k8s.io/api/apps/v1beta2"
 	kubeerr "k8s.io/apimachinery/pkg/api/errors"
@@ -15,11 +16,9 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	appslisters "k8s.io/client-go/listers/apps/v1beta2"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/workqueue"
 
 	"github.com/mbrt/k8cc/pkg/data"
@@ -31,6 +30,7 @@ type operator struct {
 	statefulsetLister    appslisters.StatefulSetLister
 	statefulsetSynced    cache.InformerSynced
 	desiredReplicasCache DesiredReplicasCache
+	logger               log.Logger
 
 	// workqueue is a rate limited work queue. This is used to queue work to be
 	// processed instead of performing it as soon as a change happens. This
@@ -40,34 +40,20 @@ type operator struct {
 	workqueue workqueue.RateLimitingInterface
 }
 
-// NewOperator creates an Operator using default the given settings for the kube connection.
-//
-// If kubecfg and masterURL are empty, defaults to in-cluster configuration
-func NewOperator(masterURL, kubecfg string, drc DesiredReplicasCache) (Operator, error) {
-	cfg, err := clientcmd.BuildConfigFromFlags(masterURL, kubecfg)
-	if err != nil {
-		return nil, err
-	}
-	kubeClient, err := kubernetes.NewForConfig(cfg)
-	if err != nil {
-		return nil, err
-	}
-	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, time.Second*30)
-	return newOperator(kubeClient, kubeInformerFactory, drc), nil
-}
-
-func newOperator(
-	kubeclientset kubernetes.Interface,
-	kubeInformerFactory kubeinformers.SharedInformerFactory,
+// NewOperator creates an Operator using the given shared client connection.
+func NewOperator(
+	sharedClient *SharedClient,
 	desiredReplicasCache DesiredReplicasCache,
+	logger log.Logger,
 ) Operator {
-	statefulsetInformer := kubeInformerFactory.Apps().V1beta2().StatefulSets()
+	statefulsetInformer := sharedClient.kubeInformerFactory.Apps().V1beta2().StatefulSets()
 
 	op := operator{
-		kubeclientset:        kubeclientset,
+		kubeclientset:        sharedClient.kubeclientset,
 		statefulsetLister:    statefulsetInformer.Lister(),
 		statefulsetSynced:    statefulsetInformer.Informer().HasSynced,
 		desiredReplicasCache: desiredReplicasCache,
+		logger:               logger,
 		workqueue:            workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "k8cc-stateful-sets"),
 	}
 
@@ -105,7 +91,7 @@ func (c *operator) Run(threadiness int, stopCh <-chan struct{}) error {
 		return errors.New("failed to wait for caches to sync")
 	}
 
-	// Launch two workers to process StatefulSet resources
+	// Launch workers to process StatefulSet resources
 	for i := 0; i < threadiness; i++ {
 		go wait.Until(c.runWorker, time.Second, stopCh)
 	}
@@ -231,7 +217,7 @@ func (c *operator) syncHandler(key string) error {
 	// get the tag from the labels
 	var tag string
 	var ok bool
-	if tag, ok = statefulset.Labels[StatefulSetLabel]; !ok {
+	if tag, ok = statefulset.Labels[BuildTagLabel]; !ok {
 		runtime.HandleError(fmt.Errorf("statefulset '%s' in work queue doesn't have required label", key))
 		return nil
 	}

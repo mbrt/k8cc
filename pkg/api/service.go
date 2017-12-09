@@ -39,9 +39,10 @@ type service struct {
 
 func (s service) LeaseUser(ctx context.Context, u data.User, t data.Tag) (Lease, error) {
 	lease, err := s.controller.TagController(t).LeaseUser(ctx, u, time.Now())
-	if err == nil {
-		err = s.operator.NotifyUpdated(t)
+	if err != nil {
+		return Lease{}, err
 	}
+	err = s.operator.NotifyUpdated(t)
 	result := Lease{
 		Expiration: lease.Expiration,
 		Hosts:      lease.Hosts,

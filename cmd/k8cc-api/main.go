@@ -47,12 +47,13 @@ func main() {
 	tagstate := state.NewInMemoryState()
 	contr := controller.NewStatefulController(options, tagstate, adapter, log.With(logger, "component", "controller"))
 
-	operator, err := kube.NewOperator(*kubeMasterURL, *kubeConfig, adapter)
+	sharedClient, err := kube.NewSharedClient(*kubeMasterURL, *kubeConfig)
 	if err != nil {
 		/* #nosec */
 		_ = logger.Log("err", err)
 		os.Exit(1)
 	}
+	operator := kube.NewOperator(sharedClient, adapter, log.With(logger, "component", "operator"))
 
 	// set now the objects for the adapter
 	adapter.Controller = contr
@@ -69,18 +70,21 @@ func main() {
 		h = api.MakeHTTPHandler(s, log.With(logger, "component", "HTTP"))
 	}
 
-	errs := make(chan error)
+	errs := make(chan error, 1)
 	defer close(errs)
+	stopCh := make(chan struct{})
 
 	go func() {
-		c := make(chan struct{})
-		errs <- operator.Run(2, c)
+		// handle signals
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
+		sig := <-c
+		close(stopCh)
+		errs <- fmt.Errorf("%s", sig)
 	}()
 
 	go func() {
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
-		errs <- fmt.Errorf("%s", <-c)
+		errs <- sharedClient.Run(stopCh)
 	}()
 
 	go func() {
@@ -88,6 +92,10 @@ func main() {
 		_ = logger.Log("transport", "HTTP", "addr", *httpAddr)
 		errs <- http.ListenAndServe(*httpAddr, h)
 	}()
+
+	if err = operator.Run(2, stopCh); err != nil {
+		errs <- err
+	}
 
 	/* #nosec */
 	_ = logger.Log("exit", <-errs)
