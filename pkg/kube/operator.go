@@ -126,7 +126,7 @@ func (c *operator) Hostnames(t data.Tag, ids []data.HostID) ([]string, error) {
 	set := sets[0]
 	r := make([]string, len(ids))
 	for i, id := range ids {
-		r[i] = fmt.Sprintf("%s-%d.%s", set.Spec.Template.Name, id, set.Spec.ServiceName)
+		r[i] = fmt.Sprintf("%s-%d.%s", set.Name, id, set.Spec.ServiceName)
 	}
 	return r, nil
 }
