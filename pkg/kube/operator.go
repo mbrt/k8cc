@@ -10,9 +10,7 @@ import (
 
 	"github.com/go-kit/kit/log"
 	"github.com/pkg/errors"
-	appsv1beta2 "k8s.io/api/apps/v1beta2"
 	kubeerr "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -62,18 +60,11 @@ func NewOperator(
 	// resources. More info on this pattern:
 	// https://github.com/kubernetes/community/blob/8cafef897a22026d42f5e5bb3f104febe7e29830/contributors/devel/controllers.md
 	statefulsetInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: op.handleObject,
+		AddFunc: op.enqueueStatefulSet,
 		UpdateFunc: func(old, new interface{}) {
-			newSet := new.(*appsv1beta2.StatefulSet)
-			oldSet := old.(*appsv1beta2.StatefulSet)
-			if newSet.ResourceVersion == oldSet.ResourceVersion {
-				// Periodic resync will send update events for all known StatefulSets.
-				// Two different versions of the same StatefulSet will always have different RVs.
-				return
-			}
-			op.handleObject(new)
+			op.enqueueStatefulSet(new)
 		},
-		DeleteFunc: op.handleObject,
+		DeleteFunc: op.deleteStatefulSet,
 	})
 
 	return &op
@@ -174,12 +165,16 @@ func (c *operator) processNextWorkItem() bool {
 		}
 		// Run the syncHandler, passing it the namespace/name string of the
 		// Foo resource to be synced.
-		if err := c.syncHandler(key); err != nil {
+		var err error
+		var needRequeue bool
+		if needRequeue, err = c.syncHandler(key); err != nil {
 			return errors.Wrap(err, fmt.Sprintf("error syncing '%s'", key))
 		}
 		// Finally, if no error occurs we Forget this item so it does not
 		// get queued again until another change happens.
-		c.workqueue.Forget(obj)
+		if !needRequeue {
+			c.workqueue.Forget(obj)
+		}
 		return nil
 	}(obj)
 
@@ -193,12 +188,14 @@ func (c *operator) processNextWorkItem() bool {
 
 // syncHandler compares the actual state with the desired, and attempts to
 // converge the two.
-func (c *operator) syncHandler(key string) error {
+func (c *operator) syncHandler(key string) (bool, error) {
+	_ = c.logger.Log("method", "syncHandler", "key", key)
+
 	// Convert the namespace/name string into a distinct namespace and name
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		runtime.HandleError(fmt.Errorf("invalid resource key: %s", key))
-		return nil
+		return false, nil
 	}
 
 	// Get the stateful set resource with this namespace/name
@@ -208,24 +205,28 @@ func (c *operator) syncHandler(key string) error {
 		// processing.
 		if kubeerr.IsNotFound(err) {
 			runtime.HandleError(fmt.Errorf("statefulset '%s' in work queue no longer exists", key))
-			return nil
+			return false, nil
 		}
 
-		return err
+		return false, err
 	}
 
 	// get the tag from the labels
 	var tag string
 	var ok bool
+	if tag, ok = statefulset.Labels[StatefulSetLabel]; !ok || tag != StatefulSetVersion {
+		return false, nil
+	}
 	if tag, ok = statefulset.Labels[BuildTagLabel]; !ok {
 		runtime.HandleError(fmt.Errorf("statefulset '%s' in work queue doesn't have required label", key))
-		return nil
+		return false, nil
 	}
 
 	desiredReplicas := c.desiredReplicasCache.DesiredReplicas(data.Tag(tag))
+	needRequeue := desiredReplicas > 0
 	if desiredReplicas == statefulset.Status.Replicas {
 		// nothing to update
-		return nil
+		return needRequeue, nil
 
 	}
 
@@ -234,7 +235,7 @@ func (c *operator) syncHandler(key string) error {
 	statefulset = statefulset.DeepCopy()
 	statefulset.Spec.Replicas = &desiredReplicas
 	_, err = c.kubeclientset.AppsV1beta2().StatefulSets(statefulset.Namespace).Update(statefulset)
-	return err
+	return needRequeue, err
 }
 
 // enqueueStatefulSet takes a StatefulSet resource and converts it into a
@@ -250,30 +251,18 @@ func (c *operator) enqueueStatefulSet(obj interface{}) {
 	c.workqueue.AddRateLimited(key)
 }
 
-// handleObject will take any resource implementing metav1.Object and attempt
-// to find the Foo resource that 'owns' it. It does this by looking at the
-// objects metadata.ownerReferences field for an appropriate OwnerReference.
-// It then enqueues that Foo resource to be processed. If the object does not
-// have an appropriate OwnerReference, it will simply be skipped.
-func (c *operator) handleObject(obj interface{}) {
-	var object metav1.Object
-	var ok bool
-	if object, ok = obj.(metav1.Object); !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			runtime.HandleError(errors.New("error decoding object, invalid type"))
-			return
-		}
-		object, ok = tombstone.Obj.(metav1.Object)
-		if !ok {
-			runtime.HandleError(errors.New("error decoding object tombstone, invalid type"))
-			return
-		}
+// enqueueStatefulSet takes a StatefulSet resource and converts it into a
+// namespace/name string which is then put onto the work queue. This method
+// should *not* be passed resources of any type other than StatefulSet.
+func (c *operator) deleteStatefulSet(obj interface{}) {
+	var key string
+	var err error
+	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
+		runtime.HandleError(err)
+		return
 	}
-	if tag, ok := object.GetLabels()[StatefulSetLabel]; ok && tag == StatefulSetVersion {
-		// this object is controlled by us, enqueue it
-		c.enqueueStatefulSet(object)
-	}
+	// the object is gone: delete it from the queue
+	c.workqueue.Forget(key)
 }
 
 // DesiredReplicasCache provides the numebr of desired replicas for a certain tag
