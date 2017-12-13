@@ -170,8 +170,7 @@ func (c *operator) processNextWorkItem() bool {
 		if needRequeue, err = c.syncHandler(key); err != nil {
 			return errors.Wrap(err, fmt.Sprintf("error syncing '%s'", key))
 		}
-		// Finally, if no error occurs we Forget this item so it does not
-		// get queued again until another change happens.
+		// TODO: never forget when CRD is implemented
 		if !needRequeue {
 			c.workqueue.Forget(obj)
 		}

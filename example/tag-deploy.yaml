@@ -24,6 +24,7 @@ spec:
           - "--allow"
           - "10.0.0.0/8"  # set this to the pod network
           - "--no-detach"
+          - "--daemon"
           - "--log-stderr"
         ports:
         - containerPort: 3632
