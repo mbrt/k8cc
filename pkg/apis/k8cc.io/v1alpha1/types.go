@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -36,13 +37,27 @@ type Distcc struct {
 
 // DistccSpec is the spec for a Distcc resource
 type DistccSpec struct {
-	DeploymentName string `json:"deploymentName"`
-	Replicas       *int32 `json:"replicas"`
+	DeploymentName string                `json:"deploymentName"`
+	ServiceName    string                `json:"serviceName"`
+	Selector       *metav1.LabelSelector `json:"selector,omitempty"`
+	MinReplicas    *int32                `json:"minReplicas,omitempty"`
+	MaxReplicas    int32                 `json:"maxReplicas,omitempty"`
+	UserReplicas   int32                 `json:"userReplicas,omitempty"`
+	Template       v1.PodTemplateSpec    `json:"template"`
 }
 
 // DistccStatus is the status for a Distcc resource
 type DistccStatus struct {
-	AvailableReplicas int32 `json:"availableReplicas"`
+	LastTransitionTime metav1.Time   `json:"lastTransitionTime,omitempty"`
+	Leases             []DistccLease `json:"leases,omitempty"`
+}
+
+// DistccLease contains info about a user lease
+type DistccLease struct {
+	UserName       string      `json:"userName"`
+	ExpirationTime metav1.Time `json:"expirationTime"`
+	// AssignedHosts represents the ID of the hosts assigned to the user
+	AssignedHosts []int32 `json:"assignedHosts"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

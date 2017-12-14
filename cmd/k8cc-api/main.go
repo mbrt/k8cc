@@ -11,9 +11,9 @@ import (
 
 	"github.com/go-kit/kit/log"
 
-	"github.com/mbrt/k8cc/pkg/api"
 	"github.com/mbrt/k8cc/pkg/controller"
 	"github.com/mbrt/k8cc/pkg/kube"
+	"github.com/mbrt/k8cc/pkg/service"
 	"github.com/mbrt/k8cc/pkg/state"
 )
 
@@ -59,15 +59,15 @@ func main() {
 	adapter.Controller = contr
 	adapter.Operator = operator
 
-	var s api.Service
+	var s service.Service
 	{
-		s = api.NewService(contr, operator)
-		s = api.LoggingMiddleware(logger)(s)
+		s = service.NewService(contr, operator)
+		s = service.LoggingMiddleware(logger)(s)
 	}
 
 	var h http.Handler
 	{
-		h = api.MakeHTTPHandler(s, log.With(logger, "component", "HTTP"))
+		h = service.MakeHTTPHandler(s, log.With(logger, "component", "HTTP"))
 	}
 
 	errs := make(chan error, 1)
