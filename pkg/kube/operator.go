@@ -227,7 +227,10 @@ func (c *operator) processNextWorkItem() bool {
 		if err := c.syncHandler(key); err != nil {
 			return errors.Wrap(err, fmt.Sprintf("error syncing '%s'", key))
 		}
-		// Don't call forget here: never forget it until it's deleted
+
+		// Finally, if no error occurs we Forget this item so it does not
+		// get queued again until another change happens.
+		c.workqueue.Forget(obj)
 		return nil
 	}(obj)
 
@@ -276,11 +279,11 @@ func (c *operator) syncHandler(key string) error {
 
 	// Get the statefulset with the name specified in Distcc.spec
 	updated := false
-	deployment, err := c.statefulsetLister.StatefulSets(distcc.Namespace).Get(statefulName)
+	stateful, err := c.statefulsetLister.StatefulSets(distcc.Namespace).Get(statefulName)
 	// If the resource doesn't exist, we'll create it
 	if kubeerr.IsNotFound(err) {
 		new := newStatefulSet(distcc, nil)
-		deployment, err = c.kubeclientset.AppsV1beta2().StatefulSets(distcc.Namespace).Create(new)
+		stateful, err = c.kubeclientset.AppsV1beta2().StatefulSets(distcc.Namespace).Create(new)
 		updated = true
 	}
 
@@ -293,17 +296,17 @@ func (c *operator) syncHandler(key string) error {
 
 	// If the StatefulSet is not controlled by this Distcc resource, we should log
 	// a warning to the event recorder and ret
-	if !metav1.IsControlledBy(deployment, distcc) {
-		msg := fmt.Sprintf(MessageResourceExists, deployment.Name)
+	if !metav1.IsControlledBy(stateful, distcc) {
+		msg := fmt.Sprintf(MessageResourceExists, stateful.Name)
 		c.recorder.Event(distcc, corev1.EventTypeWarning, ErrResourceExists, msg)
 		return fmt.Errorf(msg)
 	}
 
 	// Update the number of replicas, in case it doesn't match the desired
 	desiredReplicas := c.desiredReplicasCache.DesiredReplicas(tag)
-	if deployment.Spec.Replicas == nil || *deployment.Spec.Replicas != desiredReplicas {
+	if stateful.Spec.Replicas == nil || *stateful.Spec.Replicas != desiredReplicas {
 		new := newStatefulSet(distcc, &desiredReplicas)
-		deployment, err = c.kubeclientset.AppsV1beta2().StatefulSets(distcc.Namespace).Update(new)
+		stateful, err = c.kubeclientset.AppsV1beta2().StatefulSets(distcc.Namespace).Update(new)
 		updated = true
 	}
 
@@ -316,7 +319,7 @@ func (c *operator) syncHandler(key string) error {
 
 	// Finally, we update the status block of the Distcc resource to reflect the
 	// current state of the world
-	err = c.updateDistccStatus(distcc, deployment, updated)
+	err = c.updateDistccStatus(distcc, stateful, updated)
 	return err
 }
 
