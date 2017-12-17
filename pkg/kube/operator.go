@@ -160,6 +160,7 @@ func (c *operator) Run(threadiness int, stopCh <-chan struct{}) error {
 }
 
 func (c *operator) NotifyUpdated(t data.Tag) error {
+	_ = c.logger.Log("method", "notifyUpdated", "tag", t)
 	distcc, err := c.distccsLister.Distccs(t.Namespace).Get(t.Name)
 	if err != nil {
 		return err
@@ -300,7 +301,7 @@ func (c *operator) syncHandler(key string) error {
 
 	// Update the number of replicas, in case it doesn't match the desired
 	desiredReplicas := c.desiredReplicasCache.DesiredReplicas(tag)
-	if desiredReplicas != deployment.Status.Replicas {
+	if deployment.Spec.Replicas == nil || *deployment.Spec.Replicas != desiredReplicas {
 		new := newStatefulSet(distcc, &desiredReplicas)
 		deployment, err = c.kubeclientset.AppsV1beta2().StatefulSets(distcc.Namespace).Update(new)
 		updated = true
