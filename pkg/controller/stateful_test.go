@@ -30,10 +30,11 @@ func TestStatefulSingleUser(t *testing.T) {
 	}
 	tagsstate := state.NewInMemoryState()
 	cont := NewStatefulController(opts, tagsstate, operator, logger).(statefulController)
-	tagController := cont.TagController("master")
+	tag := data.Tag{Namespace: "default", Name: "master"}
+	tagController := cont.TagController(tag)
 
 	// the user comes in
-	operator.EXPECT().Hostnames(data.Tag("master"), []data.HostID{0, 1, 2}).Return([]string{
+	operator.EXPECT().Hostnames(tag, []data.HostID{0, 1, 2}).Return([]string{
 		"distcc-0.distcc-master",
 		"distcc-1.distcc-master",
 		"distcc-2.distcc-master",
@@ -59,7 +60,7 @@ func TestStatefulSingleUser(t *testing.T) {
 	// if a user renews the lease, it'll get new hosts (correct), but
 	// then the old hosts are still assigned to the same user. They
 	// should instead be revoked
-	operator.EXPECT().Hostnames(data.Tag("master"), []data.HostID{0, 1, 2}).Return([]string{
+	operator.EXPECT().Hostnames(tag, []data.HostID{0, 1, 2}).Return([]string{
 		"distcc-0.distcc-master",
 		"distcc-1.distcc-master",
 		"distcc-2.distcc-master",
@@ -99,11 +100,12 @@ func TestStatefulTwoUsers(t *testing.T) {
 	}
 	tagsstate := state.NewInMemoryState()
 	cont := NewStatefulController(opts, tagsstate, operator, logger).(statefulController)
-	tagController := cont.TagController("master")
-	mstate := tagsstate.TagState("master")
+	tag := data.Tag{Namespace: "default", Name: "master"}
+	tagController := cont.TagController(tag)
+	mstate := tagsstate.TagState(tag)
 
 	// the first user comes in
-	operator.EXPECT().Hostnames(data.Tag("master"), []data.HostID{0, 1, 2}).Return([]string{
+	operator.EXPECT().Hostnames(tag, []data.HostID{0, 1, 2}).Return([]string{
 		"distcc-0.distcc-master",
 		"distcc-1.distcc-master",
 		"distcc-2.distcc-master",
@@ -126,7 +128,7 @@ func TestStatefulTwoUsers(t *testing.T) {
 
 	// some times has passed, another user arrives
 	now = now.Add(5 * time.Minute)
-	operator.EXPECT().Hostnames(data.Tag("master"), []data.HostID{3, 4, 0}).Return([]string{
+	operator.EXPECT().Hostnames(tag, []data.HostID{3, 4, 0}).Return([]string{
 		"distcc-3.distcc-master",
 		"distcc-4.distcc-master",
 		"distcc-0.distcc-master",
@@ -156,7 +158,7 @@ func TestStatefulTwoUsers(t *testing.T) {
 
 	// the first user kicks in again, while the second is still alive
 	now = now.Add(1 * time.Minute)
-	operator.EXPECT().Hostnames(data.Tag("master"), []data.HostID{1, 2, 3}).Return([]string{
+	operator.EXPECT().Hostnames(tag, []data.HostID{1, 2, 3}).Return([]string{
 		"distcc-1.distcc-master",
 		"distcc-2.distcc-master",
 		"distcc-3.distcc-master",

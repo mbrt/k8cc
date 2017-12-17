@@ -11,7 +11,7 @@ import (
 
 func TestStorageSingleUser(t *testing.T) {
 	state := NewInMemoryState()
-	mstate := state.TagState("master")
+	mstate := state.TagState(data.Tag{Namespace: "default", Name: "master"})
 	now := time.Now()
 	exp1 := now.Add(5 * time.Minute)
 
@@ -33,7 +33,7 @@ func TestStorageSingleUser(t *testing.T) {
 
 func TestStorageMultipleUsers(t *testing.T) {
 	state := NewInMemoryState()
-	mstate := state.TagState("master")
+	mstate := state.TagState(data.Tag{Namespace: "default", Name: "master"})
 	now := time.Now()
 	exp1 := now.Add(5 * time.Minute)
 

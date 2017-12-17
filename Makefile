@@ -10,5 +10,5 @@ test:
 
 .PHONY: gen
 gen:
-	go generate ./...
 	./hack/update-codegen.sh
+	go generate ./...

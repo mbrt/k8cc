@@ -32,13 +32,42 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: k8cc-build-master
+  name: distcc-master
   labels:
-    k8cc.io/build-tag: master
-    k8cc.io/deploy-version: v1
+    build-tag: master
 spec:
   ports:
   - port: 3632
   clusterIP: None
   selector:
-    k8cc.io/build-tag: master
+    build-tag: master
+---
+apiVersion: k8cc.io/v1alpha1
+kind: Distcc
+metadata:
+  name: master
+  labels:
+    build-tag: master
+spec:
+  deploymentName: distcc-master
+  serviceName: distcc-master
+  selector:
+    matchLabels:
+      build-tag: master
+  template:
+    metadata:
+      labels:
+        build-tag: master
+    spec:
+      containers:
+      - name: distcc
+        image: mbrt/distcc-ubuntu
+        args:
+          - "distccd"
+          - "--allow"
+          - "10.0.0.0/8"  # set this to the pod network
+          - "--no-detach"
+          - "--daemon"
+          - "--log-stderr"
+        ports:
+        - containerPort: 3632
