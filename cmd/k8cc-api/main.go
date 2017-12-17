@@ -58,6 +58,7 @@ func main() {
 	// set now the objects for the adapter
 	adapter.Controller = contr
 	adapter.Operator = operator
+	adapter.State = tagstate
 
 	var s service.Service
 	{

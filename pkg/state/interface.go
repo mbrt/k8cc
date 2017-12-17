@@ -23,4 +23,6 @@ type TagStater interface {
 	RemoveLease(u data.User)
 	// HostsUsage returns the number of users assigned to each build host, ordered by build host id
 	HostsUsage(now time.Time) []int
+	// Leases returns all the active leases
+	Leases(now time.Time) []data.Lease
 }

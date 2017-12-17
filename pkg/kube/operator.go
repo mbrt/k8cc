@@ -51,14 +51,14 @@ const controllerAgentName = "k8cc-controller"
 
 // operator controls tag deployments as a regular Kubernetes operator
 type operator struct {
-	kubeclientset        kubernetes.Interface
-	k8ccclientset        clientset.Interface
-	statefulsetLister    appslisters.StatefulSetLister
-	statefulsetSynced    cache.InformerSynced
-	distccsLister        listers.DistccLister
-	distccsSynced        cache.InformerSynced
-	desiredReplicasCache DesiredReplicasCache
-	logger               log.Logger
+	kubeclientset     kubernetes.Interface
+	k8ccclientset     clientset.Interface
+	statefulsetLister appslisters.StatefulSetLister
+	statefulsetSynced cache.InformerSynced
+	distccsLister     listers.DistccLister
+	distccsSynced     cache.InformerSynced
+	desiredState      DesiredStateProvider
+	logger            log.Logger
 
 	// workqueue is a rate limited work queue. This is used to queue work to be
 	// processed instead of performing it as soon as a change happens. This
@@ -74,7 +74,7 @@ type operator struct {
 // NewOperator creates an Operator using the given shared client connection.
 func NewOperator(
 	sharedClient *SharedClient,
-	desiredReplicasCache DesiredReplicasCache,
+	desiredState DesiredStateProvider,
 	logger log.Logger,
 ) Operator {
 	statefulsetInformer := sharedClient.kubeInformerFactory.Apps().V1beta2().StatefulSets()
@@ -93,16 +93,16 @@ func NewOperator(
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	op := operator{
-		kubeclientset:        sharedClient.kubeclientset,
-		k8ccclientset:        sharedClient.k8ccclientset,
-		statefulsetLister:    statefulsetInformer.Lister(),
-		statefulsetSynced:    statefulsetInformer.Informer().HasSynced,
-		distccsLister:        distccInformer.Lister(),
-		distccsSynced:        distccInformer.Informer().HasSynced,
-		desiredReplicasCache: desiredReplicasCache,
-		logger:               logger,
-		workqueue:            workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "k8cc-stateful-sets"),
-		recorder:             recorder,
+		kubeclientset:     sharedClient.kubeclientset,
+		k8ccclientset:     sharedClient.k8ccclientset,
+		statefulsetLister: statefulsetInformer.Lister(),
+		statefulsetSynced: statefulsetInformer.Informer().HasSynced,
+		distccsLister:     distccInformer.Lister(),
+		distccsSynced:     distccInformer.Informer().HasSynced,
+		desiredState:      desiredState,
+		logger:            logger,
+		workqueue:         workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "k8cc-stateful-sets"),
+		recorder:          recorder,
 	}
 
 	// Set up an event handler for when Distcc resources change
@@ -303,7 +303,7 @@ func (c *operator) syncHandler(key string) error {
 	}
 
 	// Update the number of replicas, in case it doesn't match the desired
-	desiredReplicas := c.desiredReplicasCache.DesiredReplicas(tag)
+	desiredReplicas := c.desiredState.Replicas(tag)
 	if stateful.Spec.Replicas == nil || *stateful.Spec.Replicas != desiredReplicas {
 		new := newStatefulSet(distcc, &desiredReplicas)
 		stateful, err = c.kubeclientset.AppsV1beta2().StatefulSets(distcc.Namespace).Update(new)
@@ -324,17 +324,33 @@ func (c *operator) syncHandler(key string) error {
 }
 
 func (c *operator) updateDistccStatus(distcc *k8ccv1alpha1.Distcc, statefulset *appsv1beta2.StatefulSet, updated bool) error {
+	// Get the leases from the desired state and serialize it into the
+	// DistccState version. If the state hasn't changed, then don't
+	// update the distcc object
+	tag := data.Tag{Namespace: distcc.Namespace, Name: distcc.Name}
+	leases := c.desiredState.Leases(tag)
+	leasesState := make([]k8ccv1alpha1.DistccLease, len(leases))
+	for i, lease := range leases {
+		hosts := make([]int32, len(lease.Hosts))
+		for i, h := range lease.Hosts {
+			hosts[i] = int32(h)
+		}
+		leasesState[i] = k8ccv1alpha1.DistccLease{
+			UserName:       string(lease.User),
+			ExpirationTime: *toKubeTime(lease.Expiration),
+			AssignedHosts:  hosts,
+		}
+	}
+	if !updated && isStateEqual(leasesState, distcc.Status.Leases) {
+		return nil
+	}
+
 	// NEVER modify objects from the store. It's a read-only, local cache.
 	// You can use DeepCopy() to make a deep copy of original object and modify this copy
 	// Or create a copy manually for better performance
 	distccCopy := distcc.DeepCopy()
-	// TODO: check if need user leases
-	if !updated {
-		return nil
-	}
-
-	now := metav1.NewTime(time.Now())
-	distccCopy.Status.LastTransitionTime = &now
+	distccCopy.Status.LastTransitionTime = toKubeTime(time.Now())
+	distccCopy.Status.Leases = leasesState
 	_, err := c.k8ccclientset.K8ccV1alpha1().Distccs(distcc.Namespace).Update(distccCopy)
 	if err != nil {
 		return err
@@ -441,9 +457,40 @@ func newStatefulSet(distcc *k8ccv1alpha1.Distcc, replicas *int32) *appsv1beta2.S
 	}
 }
 
-// DesiredReplicasCache provides the numebr of desired replicas for a certain tag
-type DesiredReplicasCache interface {
-	// DesiredReplicas returns the number of desired replicas for the
-	// stateful set associated with a tag
-	DesiredReplicas(t data.Tag) int32
+func toKubeTime(t time.Time) *metav1.Time {
+	// It's necessary to truncate nanoseconds to allow correct comparison
+	r := metav1.NewTime(t).Rfc3339Copy()
+	return &r
+}
+
+func isStateEqual(a, b []k8ccv1alpha1.DistccLease) bool {
+	// Unfortunately DeepEqual doesn't work with time,
+	// so I needed to rollout my own Equal
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		la := a[i]
+		lb := b[i]
+		if la.UserName != lb.UserName ||
+			!la.ExpirationTime.Equal(&lb.ExpirationTime) ||
+			len(la.AssignedHosts) != len(lb.AssignedHosts) {
+			return false
+		}
+		for i := range la.AssignedHosts {
+			if la.AssignedHosts[i] != lb.AssignedHosts[i] {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// DesiredStateProvider provides the numebr of desired replicas for a certain tag
+type DesiredStateProvider interface {
+	// Replicas returns the number of desired replicas for the stateful set
+	// associated with a tag
+	Replicas(t data.Tag) int32
+	// Leases returns all the active leases
+	Leases(t data.Tag) []data.Lease
 }

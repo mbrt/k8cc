@@ -91,3 +91,24 @@ func (tl *inMemoryTagState) HostsUsage(now time.Time) []int {
 	}
 	return result
 }
+
+func (tl *inMemoryTagState) Leases(now time.Time) []data.Lease {
+	tl.mut.Lock()
+	defer tl.mut.Unlock()
+
+	result := []data.Lease{}
+	for user, lease := range tl.leases {
+		// remove expired users
+		if now.After(lease.expiration) {
+			delete(tl.leases, user)
+		} else {
+			lease := data.Lease{
+				User:       user,
+				Expiration: lease.expiration,
+				Hosts:      lease.hosts,
+			}
+			result = append(result, lease)
+		}
+	}
+	return result
+}

@@ -5,6 +5,7 @@ import (
 
 	"github.com/mbrt/k8cc/pkg/data"
 	"github.com/mbrt/k8cc/pkg/kube"
+	"github.com/mbrt/k8cc/pkg/state"
 )
 
 // Adapter adapts Controller to the interface used by Operator and vice-versa.
@@ -12,12 +13,18 @@ import (
 type Adapter struct {
 	Controller Controller
 	Operator   kube.Operator
+	State      state.TagsStater
 }
 
-// DesiredReplicas is the adapter method for DesiredReplicasCache interface
-func (a Adapter) DesiredReplicas(t data.Tag) int32 {
+// Replicas is the adapter method for DesiredState interface
+func (a Adapter) Replicas(t data.Tag) int32 {
 	r := a.Controller.TagController(t).DesiredReplicas(time.Now())
 	return int32(r)
+}
+
+// Leases is the adapter method for the DesiredState interface
+func (a Adapter) Leases(t data.Tag) []data.Lease {
+	return a.State.TagState(t).Leases(time.Now())
 }
 
 // Hostnames is the adapter method for the Hostnamer interface

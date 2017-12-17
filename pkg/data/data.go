@@ -1,6 +1,9 @@
 package data
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 // HostID is an identifier for a build host
 type HostID int
@@ -17,3 +20,10 @@ func (t Tag) String() string {
 
 // User is an identifier for a user
 type User string
+
+// Lease represents a temporary assignment of hosts to a user
+type Lease struct {
+	User       User
+	Expiration time.Time
+	Hosts      []HostID
+}
