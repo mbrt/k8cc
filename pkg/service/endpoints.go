@@ -24,7 +24,7 @@ func MakeEndpoints(s Service) Endpoints {
 func MakePutLeaseUserEndpoint(s Service) endpoint.Endpoint {
 	return func(ctx context.Context, request interface{}) (response interface{}, err error) {
 		req := request.(putLeaseUserRequest)
-		t, err := s.LeaseUser(ctx, data.User(req.User), data.Tag{req.Namespace, req.Tag})
+		t, err := s.LeaseUser(ctx, data.User(req.User), data.Tag{Namespace: req.Namespace, Name: req.Tag})
 		return putLeaseUserResponse{t, err}, nil
 	}
 }

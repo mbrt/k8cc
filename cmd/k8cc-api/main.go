@@ -12,6 +12,7 @@ import (
 	"github.com/go-kit/kit/log"
 
 	"github.com/mbrt/k8cc/pkg/controller"
+	"github.com/mbrt/k8cc/pkg/data"
 	"github.com/mbrt/k8cc/pkg/kube"
 	"github.com/mbrt/k8cc/pkg/service"
 	"github.com/mbrt/k8cc/pkg/state"
@@ -36,16 +37,17 @@ func main() {
 		logger = log.With(logger, "caller", log.DefaultCaller)
 	}
 
-	options := controller.AutoScaleOptions{
+	options := data.ScaleSettings{
 		MinReplicas:     *minReplicas,
 		MaxReplicas:     *maxReplicas,
 		ReplicasPerUser: *replicasPerUser,
 		LeaseTime:       time.Duration(*leaseTimeMinutes) * time.Minute,
 	}
+	scaleSettings := controller.NewStaticScaleSettingsProvider(options)
 
 	adapter := &controller.Adapter{}
 	tagstate := state.NewInMemoryState()
-	contr := controller.NewStatefulController(options, tagstate, adapter, log.With(logger, "component", "controller"))
+	contr := controller.NewStatefulController(scaleSettings, tagstate, adapter, log.With(logger, "component", "controller"))
 
 	sharedClient, err := kube.NewSharedClient(*kubeMasterURL, *kubeConfig)
 	if err != nil {

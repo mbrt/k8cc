@@ -22,14 +22,15 @@ func TestStatefulSingleUser(t *testing.T) {
 	logger := dummyLogger{}
 	ctx := context.Background()
 	now := time.Now()
-	opts := AutoScaleOptions{
+	opts := data.ScaleSettings{
 		MinReplicas:     1,
 		MaxReplicas:     5,
 		ReplicasPerUser: 3,
 		LeaseTime:       10 * time.Minute,
 	}
+	scaleSettings := NewStaticScaleSettingsProvider(opts)
 	tagsstate := state.NewInMemoryState()
-	cont := NewStatefulController(opts, tagsstate, operator, logger).(statefulController)
+	cont := NewStatefulController(scaleSettings, tagsstate, operator, logger).(statefulController)
 	tag := data.Tag{Namespace: "default", Name: "master"}
 	tagController := cont.TagController(tag)
 
@@ -92,14 +93,15 @@ func TestStatefulTwoUsers(t *testing.T) {
 	logger := dummyLogger{}
 	ctx := context.Background()
 	now := time.Now()
-	opts := AutoScaleOptions{
+	opts := data.ScaleSettings{
 		MinReplicas:     1,
 		MaxReplicas:     5,
 		ReplicasPerUser: 3,
 		LeaseTime:       10 * time.Minute,
 	}
+	scaleSettings := NewStaticScaleSettingsProvider(opts)
 	tagsstate := state.NewInMemoryState()
-	cont := NewStatefulController(opts, tagsstate, operator, logger).(statefulController)
+	cont := NewStatefulController(scaleSettings, tagsstate, operator, logger).(statefulController)
 	tag := data.Tag{Namespace: "default", Name: "master"}
 	tagController := cont.TagController(tag)
 	mstate := tagsstate.TagState(tag)

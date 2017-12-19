@@ -29,10 +29,19 @@ type Lease struct {
 	Hosts      []string
 }
 
-// AutoScaleOptions contains scaling options
-type AutoScaleOptions struct {
-	MinReplicas     int
-	MaxReplicas     int
-	ReplicasPerUser int
-	LeaseTime       time.Duration
+// ScaleSettingsProvider provides the scale settings for any given tag
+type ScaleSettingsProvider interface {
+	// ScaleSettings provides scale settings for a tag
+	ScaleSettings(t data.Tag) (data.ScaleSettings, error)
+}
+
+// NewStaticScaleSettingsProvider creates a provider that always return the same settings
+func NewStaticScaleSettingsProvider(s data.ScaleSettings) ScaleSettingsProvider {
+	return staticScaleSettingsProvider(s)
+}
+
+type staticScaleSettingsProvider data.ScaleSettings
+
+func (s staticScaleSettingsProvider) ScaleSettings(t data.Tag) (data.ScaleSettings, error) {
+	return data.ScaleSettings(s), nil
 }

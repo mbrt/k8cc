@@ -15,7 +15,7 @@ import (
 // NewStatefulController creates a controller that uses StatefulSets to manage
 // the build hosts
 func NewStatefulController(
-	opts AutoScaleOptions,
+	opts ScaleSettingsProvider,
 	tagsState state.TagsStater,
 	hostnamer kube.Hostnamer,
 	logger log.Logger,
@@ -29,7 +29,7 @@ func NewStatefulController(
 }
 
 type statefulController struct {
-	opts      AutoScaleOptions
+	opts      ScaleSettingsProvider
 	tagsState state.TagsStater
 	hostnamer kube.Hostnamer
 	logger    log.Logger
@@ -41,12 +41,17 @@ func (c statefulController) TagController(tag data.Tag) TagController {
 
 type statefulTagController struct {
 	tag       data.Tag
-	opts      AutoScaleOptions
+	opts      ScaleSettingsProvider
 	tagsState state.TagsStater
 	hostnamer kube.Hostnamer
 }
 
 func (c statefulTagController) LeaseUser(ctx context.Context, user data.User, now time.Time) (Lease, error) {
+	opts, err := c.opts.ScaleSettings(c.tag)
+	if err != nil {
+		return Lease{}, errors.Wrap(err, "error getting settings for tag")
+	}
+
 	// remove the possible previous user lease
 	c.tagsState.TagState(c.tag).RemoveLease(user)
 
@@ -62,14 +67,14 @@ func (c statefulTagController) LeaseUser(ctx context.Context, user data.User, no
 			}
 		}
 	}
-	hosts := make([]data.HostID, c.opts.ReplicasPerUser)
+	hosts := make([]data.HostID, opts.ReplicasPerUser)
 	for i := range hosts {
 		// we have to wrap around max replicas
-		hosts[i] = data.HostID(assigned % c.opts.MaxReplicas)
+		hosts[i] = data.HostID(assigned % opts.MaxReplicas)
 		assigned++
 	}
 
-	t := now.Add(c.opts.LeaseTime)
+	t := now.Add(opts.LeaseTime)
 	c.tagsState.TagState(c.tag).SetLease(user, t, hosts)
 
 	hostnames, err := c.hostnamer.Hostnames(c.tag, hosts)

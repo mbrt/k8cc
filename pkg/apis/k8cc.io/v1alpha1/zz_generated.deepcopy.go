@@ -166,6 +166,16 @@ func (in *DistccSpec) DeepCopyInto(out *DistccSpec) {
 			**out = **in
 		}
 	}
+	out.LeaseDuration = in.LeaseDuration
+	if in.DownscaleWindow != nil {
+		in, out := &in.DownscaleWindow, &out.DownscaleWindow
+		if *in == nil {
+			*out = nil
+		} else {
+			*out = new(v1.Duration)
+			**out = **in
+		}
+	}
 	in.Template.DeepCopyInto(&out.Template)
 	return
 }

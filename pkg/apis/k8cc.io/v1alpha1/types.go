@@ -37,13 +37,15 @@ type Distcc struct {
 
 // DistccSpec is the spec for a Distcc resource
 type DistccSpec struct {
-	DeploymentName string                `json:"deploymentName"`
-	ServiceName    string                `json:"serviceName"`
-	Selector       *metav1.LabelSelector `json:"selector,omitempty"`
-	MinReplicas    *int32                `json:"minReplicas,omitempty"`
-	MaxReplicas    int32                 `json:"maxReplicas,omitempty"`
-	UserReplicas   int32                 `json:"userReplicas,omitempty"`
-	Template       v1.PodTemplateSpec    `json:"template"`
+	DeploymentName  string                `json:"deploymentName"`
+	ServiceName     string                `json:"serviceName"`
+	Selector        *metav1.LabelSelector `json:"selector,omitempty"`
+	MinReplicas     *int32                `json:"minReplicas,omitempty"`
+	MaxReplicas     int32                 `json:"maxReplicas"`
+	UserReplicas    int32                 `json:"userReplicas"`
+	LeaseDuration   metav1.Duration       `json:"leaseDuration"`
+	DownscaleWindow *metav1.Duration      `json:"downscaleWindow"`
+	Template        v1.PodTemplateSpec    `json:"template"`
 }
 
 // DistccStatus is the status for a Distcc resource

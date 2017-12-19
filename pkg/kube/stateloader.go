@@ -23,7 +23,11 @@ func NewStateLoader(client *SharedClient) StateLoader {
 
 // Load implements the state.Loader interface
 func (s StateLoader) Load() ([]data.TagLeases, error) {
-	// list all distccs across all namespaces
+	// NOTE: This doesn't use the informer pattern because it's just a big hastle
+	// in the loading phase. Since we do this only once, at the beginning, it's
+	// perfectly justified.
+	//
+	// List all distccs across all namespaces
 	distccs, err := s.k8ccclientset.K8ccV1alpha1().Distccs("").List(v1.ListOptions{})
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot list distccs")

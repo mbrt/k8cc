@@ -33,3 +33,11 @@ type TagLeases struct {
 	Tag    Tag
 	Leases []Lease
 }
+
+// ScaleSettings contains scaling options
+type ScaleSettings struct {
+	MinReplicas     int
+	MaxReplicas     int
+	ReplicasPerUser int
+	LeaseTime       time.Duration
+}
