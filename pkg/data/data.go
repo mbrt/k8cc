@@ -27,3 +27,9 @@ type Lease struct {
 	Expiration time.Time
 	Hosts      []HostID
 }
+
+// TagLeases represents all the leases of a certain tag
+type TagLeases struct {
+	Tag    Tag
+	Leases []Lease
+}

@@ -20,7 +20,7 @@ func TestStorageSingleUser(t *testing.T) {
 	usage := mstate.HostsUsage(now)
 	assert.Equal(t, []int{1, 1, 1}, usage)
 	expectedLeases := []data.Lease{
-		data.Lease{User: "mike", Expiration: exp1, Hosts: []data.HostID{0, 1, 2}},
+		{User: "mike", Expiration: exp1, Hosts: []data.HostID{0, 1, 2}},
 	}
 	leases := mstate.Leases(now)
 	assert.Equal(t, expectedLeases, leases)
@@ -30,7 +30,7 @@ func TestStorageSingleUser(t *testing.T) {
 	usage = mstate.HostsUsage(now)
 	assert.Equal(t, []int{1, 1, 1}, usage)
 	expectedLeases = []data.Lease{
-		data.Lease{User: "mike", Expiration: exp1, Hosts: []data.HostID{0, 1, 2}},
+		{User: "mike", Expiration: exp1, Hosts: []data.HostID{0, 1, 2}},
 	}
 	leases = mstate.Leases(now)
 	assert.Equal(t, expectedLeases, leases)
@@ -54,7 +54,7 @@ func TestStorageMultipleUsers(t *testing.T) {
 	usage := mstate.HostsUsage(now)
 	assert.Equal(t, []int{1, 1, 1}, usage)
 	expectedLeases := []data.Lease{
-		data.Lease{User: "mike", Expiration: exp1, Hosts: []data.HostID{0, 1, 2}},
+		{User: "mike", Expiration: exp1, Hosts: []data.HostID{0, 1, 2}},
 	}
 	leases := mstate.Leases(now)
 	assert.Equal(t, expectedLeases, leases)
@@ -66,8 +66,8 @@ func TestStorageMultipleUsers(t *testing.T) {
 	usage = mstate.HostsUsage(now)
 	assert.Equal(t, []int{1, 2, 2, 1}, usage)
 	expectedLeases = []data.Lease{
-		data.Lease{User: "mike", Expiration: exp1, Hosts: []data.HostID{0, 1, 2}},
-		data.Lease{User: "alice", Expiration: exp2, Hosts: []data.HostID{1, 2, 3}},
+		{User: "mike", Expiration: exp1, Hosts: []data.HostID{0, 1, 2}},
+		{User: "alice", Expiration: exp2, Hosts: []data.HostID{1, 2, 3}},
 	}
 	leases = mstate.Leases(now)
 	assert.Equal(t, expectedLeases, leases)
@@ -77,7 +77,7 @@ func TestStorageMultipleUsers(t *testing.T) {
 	usage = mstate.HostsUsage(now)
 	assert.Equal(t, []int{0, 1, 1, 1}, usage)
 	expectedLeases = []data.Lease{
-		data.Lease{User: "alice", Expiration: exp2, Hosts: []data.HostID{1, 2, 3}},
+		{User: "alice", Expiration: exp2, Hosts: []data.HostID{1, 2, 3}},
 	}
 	leases = mstate.Leases(now)
 	assert.Equal(t, expectedLeases, leases)

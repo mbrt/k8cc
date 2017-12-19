@@ -53,6 +53,14 @@ func main() {
 		_ = logger.Log("err", err)
 		os.Exit(1)
 	}
+
+	// load the state before to start anything
+	if err = state.LoadFrom(tagstate, kube.NewStateLoader(sharedClient)); err != nil {
+		/* #nosec */
+		_ = logger.Log("err", err)
+		os.Exit(1)
+	}
+
 	operator := kube.NewOperator(sharedClient, adapter, log.With(logger, "component", "operator"))
 
 	// set now the objects for the adapter
@@ -94,6 +102,7 @@ func main() {
 		errs <- http.ListenAndServe(*httpAddr, h)
 	}()
 
+	// this last one takes ownership of the main goroutine
 	if err = operator.Run(2, stopCh); err != nil {
 		errs <- err
 	}
