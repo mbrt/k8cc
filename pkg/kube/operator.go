@@ -181,6 +181,23 @@ func (c *operator) Hostnames(t data.Tag, ids []data.HostID) ([]string, error) {
 	return r, nil
 }
 
+func (c *operator) ScaleSettings(t data.Tag) (data.ScaleSettings, error) {
+	distcc, err := c.distccsLister.Distccs(t.Namespace).Get(t.Name)
+	if err != nil {
+		return data.ScaleSettings{}, err
+	}
+	minReplicas := 0
+	if distcc.Spec.MinReplicas != nil {
+		minReplicas = int(*distcc.Spec.MinReplicas)
+	}
+	return data.ScaleSettings{
+		MinReplicas:     minReplicas,
+		MaxReplicas:     int(distcc.Spec.MaxReplicas),
+		ReplicasPerUser: int(distcc.Spec.UserReplicas),
+		LeaseTime:       distcc.Spec.LeaseDuration.Duration,
+	}, nil
+}
+
 // runWorker is a long-running function that will continually call the
 // processNextWorkItem function in order to read and process a message on the
 // workqueue.

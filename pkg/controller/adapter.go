@@ -31,3 +31,8 @@ func (a Adapter) Leases(t data.Tag) []data.Lease {
 func (a Adapter) Hostnames(t data.Tag, ids []data.HostID) ([]string, error) {
 	return a.Operator.Hostnames(t, ids)
 }
+
+// ScaleSettings is the adapter method for the ScaleSettingsProvider interface
+func (a Adapter) ScaleSettings(t data.Tag) (data.ScaleSettings, error) {
+	return a.Operator.ScaleSettings(t)
+}

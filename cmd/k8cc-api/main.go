@@ -7,12 +7,10 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/go-kit/kit/log"
 
 	"github.com/mbrt/k8cc/pkg/controller"
-	"github.com/mbrt/k8cc/pkg/data"
 	"github.com/mbrt/k8cc/pkg/kube"
 	"github.com/mbrt/k8cc/pkg/service"
 	"github.com/mbrt/k8cc/pkg/state"
@@ -20,13 +18,9 @@ import (
 
 func main() {
 	var (
-		httpAddr         = flag.String("http.addr", ":8080", "HTTP listen address")
-		minReplicas      = flag.Int("scale.min-replicas", 1, "Minimum number of replicas with no active users")
-		maxReplicas      = flag.Int("scale.max-replicas", 10, "Maximum number of replicas")
-		replicasPerUser  = flag.Int("scale.replicas-per-user", 5, "Number of replicas per active user")
-		leaseTimeMinutes = flag.Int("user.lease-time", 15, "Lease time for users in minutes")
-		kubeConfig       = flag.String("kube.config", "", "Kubeconfig path")
-		kubeMasterURL    = flag.String("kube.master-url", "", "Kubernetes master URL")
+		httpAddr      = flag.String("http.addr", ":8080", "HTTP listen address")
+		kubeConfig    = flag.String("kube.config", "", "Kubeconfig path")
+		kubeMasterURL = flag.String("kube.master-url", "", "Kubernetes master URL")
 	)
 	flag.Parse()
 
@@ -37,17 +31,9 @@ func main() {
 		logger = log.With(logger, "caller", log.DefaultCaller)
 	}
 
-	options := data.ScaleSettings{
-		MinReplicas:     *minReplicas,
-		MaxReplicas:     *maxReplicas,
-		ReplicasPerUser: *replicasPerUser,
-		LeaseTime:       time.Duration(*leaseTimeMinutes) * time.Minute,
-	}
-	scaleSettings := controller.NewStaticScaleSettingsProvider(options)
-
 	adapter := &controller.Adapter{}
 	tagstate := state.NewInMemoryState()
-	contr := controller.NewStatefulController(scaleSettings, tagstate, adapter, log.With(logger, "component", "controller"))
+	contr := controller.NewStatefulController(adapter, tagstate, adapter, log.With(logger, "component", "controller"))
 
 	sharedClient, err := kube.NewSharedClient(*kubeMasterURL, *kubeConfig)
 	if err != nil {

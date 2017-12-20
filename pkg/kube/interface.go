@@ -1,4 +1,4 @@
-//go:generate mockgen -destination mock/kube_mock.go github.com/mbrt/k8cc/pkg/kube Operator,Hostnamer
+//go:generate mockgen -destination mock/kube_mock.go github.com/mbrt/k8cc/pkg/kube Operator
 
 package kube
 
@@ -17,12 +17,8 @@ const (
 
 // Operator manages kubernetes objects for distcc tags, by scaling their replicas
 type Operator interface {
-	Hostnamer
 	Run(threadiness int, stopCh <-chan struct{}) error
 	NotifyUpdated(t data.Tag) error
-}
-
-// Hostnamer provides hostnames for build hosts
-type Hostnamer interface {
 	Hostnames(t data.Tag, ids []data.HostID) ([]string, error)
+	ScaleSettings(t data.Tag) (data.ScaleSettings, error)
 }

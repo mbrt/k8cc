@@ -1,4 +1,4 @@
-//go:generate mockgen -destination mock/controller_mock.go github.com/mbrt/k8cc/pkg/controller Controller,TagController
+//go:generate mockgen -destination mock/controller_mock.go github.com/mbrt/k8cc/pkg/controller Controller,TagController,ScaleSettingsProvider
 
 package controller
 
@@ -35,13 +35,7 @@ type ScaleSettingsProvider interface {
 	ScaleSettings(t data.Tag) (data.ScaleSettings, error)
 }
 
-// NewStaticScaleSettingsProvider creates a provider that always return the same settings
-func NewStaticScaleSettingsProvider(s data.ScaleSettings) ScaleSettingsProvider {
-	return staticScaleSettingsProvider(s)
-}
-
-type staticScaleSettingsProvider data.ScaleSettings
-
-func (s staticScaleSettingsProvider) ScaleSettings(t data.Tag) (data.ScaleSettings, error) {
-	return data.ScaleSettings(s), nil
+// Hostnamer provides hostnames for build hosts
+type Hostnamer interface {
+	Hostnames(t data.Tag, ids []data.HostID) ([]string, error)
 }

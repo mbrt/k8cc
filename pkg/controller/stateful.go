@@ -8,7 +8,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/mbrt/k8cc/pkg/data"
-	"github.com/mbrt/k8cc/pkg/kube"
 	"github.com/mbrt/k8cc/pkg/state"
 )
 
@@ -17,7 +16,7 @@ import (
 func NewStatefulController(
 	opts ScaleSettingsProvider,
 	tagsState state.TagsStater,
-	hostnamer kube.Hostnamer,
+	hostnamer Hostnamer,
 	logger log.Logger,
 ) Controller {
 	return statefulController{
@@ -31,7 +30,7 @@ func NewStatefulController(
 type statefulController struct {
 	opts      ScaleSettingsProvider
 	tagsState state.TagsStater
-	hostnamer kube.Hostnamer
+	hostnamer Hostnamer
 	logger    log.Logger
 }
 
@@ -43,7 +42,7 @@ type statefulTagController struct {
 	tag       data.Tag
 	opts      ScaleSettingsProvider
 	tagsState state.TagsStater
-	hostnamer kube.Hostnamer
+	hostnamer Hostnamer
 }
 
 func (c statefulTagController) LeaseUser(ctx context.Context, user data.User, now time.Time) (Lease, error) {

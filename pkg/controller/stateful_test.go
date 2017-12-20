@@ -28,9 +28,8 @@ func TestStatefulSingleUser(t *testing.T) {
 		ReplicasPerUser: 3,
 		LeaseTime:       10 * time.Minute,
 	}
-	scaleSettings := NewStaticScaleSettingsProvider(opts)
 	tagsstate := state.NewInMemoryState()
-	cont := NewStatefulController(scaleSettings, tagsstate, operator, logger).(statefulController)
+	cont := NewStatefulController(operator, tagsstate, operator, logger).(statefulController)
 	tag := data.Tag{Namespace: "default", Name: "master"}
 	tagController := cont.TagController(tag)
 
@@ -40,6 +39,7 @@ func TestStatefulSingleUser(t *testing.T) {
 		"distcc-1.distcc-master",
 		"distcc-2.distcc-master",
 	}, nil)
+	operator.EXPECT().ScaleSettings(gomock.Any()).Return(opts, nil)
 	lease, err := tagController.LeaseUser(ctx, "mike", now)
 	assert.Nil(t, err)
 	exp1 := now.Add(opts.LeaseTime)
@@ -66,6 +66,7 @@ func TestStatefulSingleUser(t *testing.T) {
 		"distcc-1.distcc-master",
 		"distcc-2.distcc-master",
 	}, nil)
+	operator.EXPECT().ScaleSettings(gomock.Any()).Return(opts, nil)
 	lease, err = tagController.LeaseUser(ctx, "mike", now)
 	assert.Nil(t, err)
 	exp1 = now.Add(opts.LeaseTime)
@@ -82,6 +83,24 @@ func TestStatefulSingleUser(t *testing.T) {
 	// now the user expired, the set is scaled to 0 replicas
 	now = exp1.Add(1 * time.Second)
 	assert.Equal(t, 0, tagController.DesiredReplicas(now))
+
+	// change the settings and try to lease again
+	// they should be picked up immediately
+	opts.ReplicasPerUser = 1
+	operator.EXPECT().Hostnames(tag, []data.HostID{0}).Return([]string{
+		"distcc-0.distcc-master",
+	}, nil)
+	operator.EXPECT().ScaleSettings(gomock.Any()).Return(opts, nil)
+	lease, err = tagController.LeaseUser(ctx, "mike", now)
+	assert.Nil(t, err)
+	exp1 = now.Add(opts.LeaseTime)
+	expLease = Lease{
+		Expiration: exp1,
+		Hosts: []string{
+			"distcc-0.distcc-master",
+		},
+	}
+	assert.Equal(t, expLease, lease)
 }
 
 func TestStatefulTwoUsers(t *testing.T) {
@@ -99,9 +118,8 @@ func TestStatefulTwoUsers(t *testing.T) {
 		ReplicasPerUser: 3,
 		LeaseTime:       10 * time.Minute,
 	}
-	scaleSettings := NewStaticScaleSettingsProvider(opts)
 	tagsstate := state.NewInMemoryState()
-	cont := NewStatefulController(scaleSettings, tagsstate, operator, logger).(statefulController)
+	cont := NewStatefulController(operator, tagsstate, operator, logger).(statefulController)
 	tag := data.Tag{Namespace: "default", Name: "master"}
 	tagController := cont.TagController(tag)
 	mstate := tagsstate.TagState(tag)
@@ -112,6 +130,7 @@ func TestStatefulTwoUsers(t *testing.T) {
 		"distcc-1.distcc-master",
 		"distcc-2.distcc-master",
 	}, nil)
+	operator.EXPECT().ScaleSettings(gomock.Any()).Return(opts, nil)
 	lease, err := tagController.LeaseUser(ctx, "mike", now)
 	assert.Nil(t, err)
 	exp1 := now.Add(opts.LeaseTime)
@@ -135,6 +154,7 @@ func TestStatefulTwoUsers(t *testing.T) {
 		"distcc-4.distcc-master",
 		"distcc-0.distcc-master",
 	}, nil)
+	operator.EXPECT().ScaleSettings(gomock.Any()).Return(opts, nil)
 	lease, err = tagController.LeaseUser(ctx, "alice", now)
 	assert.Nil(t, err)
 	exp2 := now.Add(opts.LeaseTime)
@@ -165,6 +185,7 @@ func TestStatefulTwoUsers(t *testing.T) {
 		"distcc-2.distcc-master",
 		"distcc-3.distcc-master",
 	}, nil)
+	operator.EXPECT().ScaleSettings(gomock.Any()).Return(opts, nil)
 	lease, err = tagController.LeaseUser(ctx, "mike", now)
 	assert.Nil(t, err)
 	exp1 = now.Add(opts.LeaseTime)
