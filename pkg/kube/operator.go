@@ -21,6 +21,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	appslisters "k8s.io/client-go/listers/apps/v1beta2"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
@@ -45,6 +46,9 @@ const (
 	// MessageResourceSynced is the message used for an Event fired when a Distcc
 	// is synced successfully
 	MessageResourceSynced = "Distcc synced successfully"
+
+	// DistccPort is the port used by distcc daemons.
+	DistccPort = 3632
 )
 
 const controllerAgentName = "k8cc-controller"
@@ -55,6 +59,8 @@ type operator struct {
 	k8ccclientset     clientset.Interface
 	statefulsetLister appslisters.StatefulSetLister
 	statefulsetSynced cache.InformerSynced
+	serviceLister     corelisters.ServiceLister
+	serviceSynced     cache.InformerSynced
 	distccsLister     listers.DistccLister
 	distccsSynced     cache.InformerSynced
 	desiredState      DesiredStateProvider
@@ -78,6 +84,7 @@ func NewOperator(
 	logger log.Logger,
 ) Operator {
 	statefulsetInformer := sharedClient.kubeInformerFactory.Apps().V1beta2().StatefulSets()
+	serviceInformer := sharedClient.kubeInformerFactory.Core().V1().Services()
 	distccInformer := sharedClient.distccInformerFactory.K8cc().V1alpha1().Distccs()
 
 	// Create event broadcaster
@@ -97,6 +104,8 @@ func NewOperator(
 		k8ccclientset:     sharedClient.k8ccclientset,
 		statefulsetLister: statefulsetInformer.Lister(),
 		statefulsetSynced: statefulsetInformer.Informer().HasSynced,
+		serviceLister:     serviceInformer.Lister(),
+		serviceSynced:     serviceInformer.Informer().HasSynced,
 		distccsLister:     distccInformer.Lister(),
 		distccsSynced:     distccInformer.Informer().HasSynced,
 		desiredState:      desiredState,
@@ -128,6 +137,21 @@ func NewOperator(
 			if newSS.ResourceVersion == oldSS.ResourceVersion {
 				// Periodic resync will send update events for all known StatefulSets.
 				// Two different versions of the same StatefulSet will always have different RVs.
+				return
+			}
+			op.handleObject(new)
+		},
+		DeleteFunc: op.handleObject,
+	})
+
+	serviceInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: op.handleObject,
+		UpdateFunc: func(old, new interface{}) {
+			newS := new.(*corev1.Service)
+			oldS := old.(*corev1.Service)
+			if newS.ResourceVersion == oldS.ResourceVersion {
+				// Periodic resync will send update events for all known Services.
+				// Two different versions of the same Service will always have different RVs.
 				return
 			}
 			op.handleObject(new)
@@ -261,8 +285,6 @@ func (c *operator) processNextWorkItem() bool {
 
 // syncHandler compares the actual state with the desired, and attempts to
 // converge the two.
-//
-// nolint: gocyclo
 func (c *operator) syncHandler(key string) error {
 	_ = c.logger.Log("method", "syncHandler", "key", key)
 
@@ -298,6 +320,16 @@ func (c *operator) syncHandler(key string) error {
 		return nil
 	}
 
+	svcUpdated, err := c.syncService(distcc)
+	if err != nil {
+		if IsTransient(err) {
+			return err
+		}
+		runtime.HandleError(err)
+		return nil
+	}
+	updated = updated || svcUpdated
+
 	// Finally, we update the status block of the Distcc resource to reflect the
 	// current state of the world
 	err = c.updateDistccStatus(distcc, updated)
@@ -316,7 +348,7 @@ func (c *operator) syncStatefulSet(distcc *k8ccv1alpha1.Distcc) (bool, error) {
 		return false, errors.Errorf("%s: deployment name must be specified", tag)
 	}
 
-	// Get the statefulset with the name specified in Distcc.spec
+	// Get the statefulset with the name specified in Distcc.Spec
 	updated := false
 	stateful, err := c.statefulsetLister.StatefulSets(distcc.Namespace).Get(statefulName)
 	// If the resource doesn't exist, we'll create it
@@ -354,6 +386,50 @@ func (c *operator) syncStatefulSet(distcc *k8ccv1alpha1.Distcc) (bool, error) {
 	// temporary network failure, or any other transient reason.
 	if err != nil {
 		return updated, transientError{err}
+	}
+
+	return updated, nil
+}
+
+func (c *operator) syncService(distcc *k8ccv1alpha1.Distcc) (bool, error) {
+	// The build tag is the name of the Distcc resource
+	tag := data.Tag{Namespace: distcc.Namespace, Name: distcc.Name}
+
+	serviceName := distcc.Spec.ServiceName
+	if serviceName == "" {
+		// We choose to absorb the error here as the worker would requeue the
+		// resource otherwise. Instead, the next time the resource is updated
+		// the resource will be queued again.
+		return false, errors.Errorf("%s: service name must be specified", tag)
+	}
+
+	if distcc.Spec.Selector == nil || len(distcc.Spec.Selector.MatchExpressions) > 0 {
+		return false, errors.Errorf("%s: selector must present, and be a 'matchLabels'", tag)
+	}
+
+	// Get the service with the name specified in Distcc.Spec
+	updated := false
+	service, err := c.serviceLister.Services(distcc.Namespace).Get(serviceName)
+	// If the resource doesn't exist, we'll create it
+	if kubeerr.IsNotFound(err) {
+		new := newService(distcc)
+		service, err = c.kubeclientset.CoreV1().Services(distcc.Namespace).Create(new)
+		updated = true
+	}
+
+	// If an error occurs during Get/Create, we'll requeue the item so we can
+	// attempt processing again later. This could have been caused by a
+	// temporary network failure, or any other transient reason.
+	if err != nil {
+		return updated, transientError{err}
+	}
+
+	// If the Service is not controlled by this Distcc resource, we should log
+	// a warning to the event recorder and ret
+	if !metav1.IsControlledBy(service, distcc) {
+		msg := fmt.Sprintf(MessageResourceExists, service.Name)
+		c.recorder.Event(distcc, corev1.EventTypeWarning, ErrResourceExists, msg)
+		return updated, transientError{errors.Errorf(msg)}
 	}
 
 	return updated, nil
@@ -489,6 +565,30 @@ func newStatefulSet(distcc *k8ccv1alpha1.Distcc, replicas *int32) *appsv1beta2.S
 			UpdateStrategy: appsv1beta2.StatefulSetUpdateStrategy{
 				Type: appsv1beta2.RollingUpdateStatefulSetStrategyType,
 			},
+		},
+	}
+}
+
+func newService(distcc *k8ccv1alpha1.Distcc) *corev1.Service {
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      distcc.Spec.ServiceName,
+			Namespace: distcc.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(distcc, schema.GroupVersionKind{
+					Group:   k8ccv1alpha1.SchemeGroupVersion.Group,
+					Version: k8ccv1alpha1.SchemeGroupVersion.Version,
+					Kind:    "Distcc",
+				}),
+			},
+			Labels: distcc.Labels,
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{Port: DistccPort},
+			},
+			Selector:  distcc.Spec.Selector.MatchLabels,
+			ClusterIP: "None",
 		},
 	}
 }
