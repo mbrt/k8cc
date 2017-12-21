@@ -10,6 +10,7 @@ spec:
   maxReplicas: 10
   userReplicas: 5
   leaseDuration: 1m
+  downscaleWindow: 2m
   selector:
     matchLabels:
       build-tag: master

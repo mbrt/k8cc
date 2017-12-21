@@ -50,8 +50,9 @@ type DistccSpec struct {
 
 // DistccStatus is the status for a Distcc resource
 type DistccStatus struct {
-	LastTransitionTime *metav1.Time  `json:"lastTransitionTime,omitempty"`
-	Leases             []DistccLease `json:"leases,omitempty"`
+	LastUpdateTime *metav1.Time  `json:"lastUpdateTime,omitempty"`
+	LastScaleTime  *metav1.Time  `json:"lastScaleTime,omitempty"`
+	Leases         []DistccLease `json:"leases,omitempty"`
 }
 
 // DistccLease contains info about a user lease

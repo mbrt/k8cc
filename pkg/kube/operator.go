@@ -307,7 +307,7 @@ func (c *operator) syncHandler(key string) error {
 		return err
 	}
 
-	updated, err := c.syncStatefulSet(distcc)
+	update, err := c.syncStatefulSet(distcc)
 	if err != nil {
 		// If an error is transient, we'll requeue the item so we can attempt
 		// processing again later. This could have been caused by a
@@ -320,7 +320,7 @@ func (c *operator) syncHandler(key string) error {
 		return nil
 	}
 
-	svcUpdated, err := c.syncService(distcc)
+	update.ServiceCreated, err = c.syncService(distcc)
 	if err != nil {
 		if IsTransient(err) {
 			return err
@@ -328,41 +328,48 @@ func (c *operator) syncHandler(key string) error {
 		runtime.HandleError(err)
 		return nil
 	}
-	updated = updated || svcUpdated
 
 	// Finally, we update the status block of the Distcc resource to reflect the
 	// current state of the world
-	err = c.updateDistccStatus(distcc, updated)
-	return err
+	err = c.updateDistccStatus(distcc, update)
+	if err != nil {
+		return err
+	}
+
+	if update.Any() {
+		// Fire a sync event only if there's been an update
+		c.recorder.Event(distcc, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
+	}
+	return nil
 }
 
-func (c *operator) syncStatefulSet(distcc *k8ccv1alpha1.Distcc) (bool, error) {
+func (c *operator) syncStatefulSet(distcc *k8ccv1alpha1.Distcc) (distccUpdateState, error) {
 	// The build tag is the name of the Distcc resource
 	tag := data.Tag{Namespace: distcc.Namespace, Name: distcc.Name}
+	var state distccUpdateState
 
 	statefulName := distcc.Spec.DeploymentName
 	if statefulName == "" {
 		// We choose to absorb the error here as the worker would requeue the
 		// resource otherwise. Instead, the next time the resource is updated
 		// the resource will be queued again.
-		return false, errors.Errorf("%s: deployment name must be specified", tag)
+		return state, errors.Errorf("%s: deployment name must be specified", tag)
 	}
 
 	// Get the statefulset with the name specified in Distcc.Spec
-	updated := false
 	stateful, err := c.statefulsetLister.StatefulSets(distcc.Namespace).Get(statefulName)
 	// If the resource doesn't exist, we'll create it
 	if kubeerr.IsNotFound(err) {
 		new := newStatefulSet(distcc, nil)
 		stateful, err = c.kubeclientset.AppsV1beta2().StatefulSets(distcc.Namespace).Create(new)
-		updated = true
+		state.StatefulCreated = true
 	}
 
 	// If an error occurs during Get/Create, we'll requeue the item so we can
 	// attempt processing again later. This could have been caused by a
 	// temporary network failure, or any other transient reason.
 	if err != nil {
-		return updated, transientError{err}
+		return state, transientError{err}
 	}
 
 	// If the StatefulSet is not controlled by this Distcc resource, we should log
@@ -370,25 +377,26 @@ func (c *operator) syncStatefulSet(distcc *k8ccv1alpha1.Distcc) (bool, error) {
 	if !metav1.IsControlledBy(stateful, distcc) {
 		msg := fmt.Sprintf(MessageResourceExists, stateful.Name)
 		c.recorder.Event(distcc, corev1.EventTypeWarning, ErrResourceExists, msg)
-		return updated, transientError{errors.Errorf(msg)}
+		return state, transientError{errors.Errorf(msg)}
 	}
 
-	// Update the number of replicas, in case it doesn't match the desired
+	// Determine the desired replicas
 	desiredReplicas := c.desiredState.Replicas(tag)
-	if stateful.Spec.Replicas == nil || *stateful.Spec.Replicas != desiredReplicas {
+	// Update the number of replicas, in case it doesn't match the desired
+	if needScale(distcc, stateful, desiredReplicas) {
 		new := newStatefulSet(distcc, &desiredReplicas)
 		_, err = c.kubeclientset.AppsV1beta2().StatefulSets(distcc.Namespace).Update(new)
-		updated = true
+
+		// If an error occurs during Update, we'll requeue the item so we can
+		// attempt processing again later. This could have been caused by a
+		// temporary network failure, or any other transient reason.
+		if err != nil {
+			return state, transientError{err}
+		}
+		state.StatefulScaled = true
 	}
 
-	// If an error occurs during Update, we'll requeue the item so we can
-	// attempt processing again later. This could have been caused by a
-	// temporary network failure, or any other transient reason.
-	if err != nil {
-		return updated, transientError{err}
-	}
-
-	return updated, nil
+	return state, nil
 }
 
 func (c *operator) syncService(distcc *k8ccv1alpha1.Distcc) (bool, error) {
@@ -435,7 +443,7 @@ func (c *operator) syncService(distcc *k8ccv1alpha1.Distcc) (bool, error) {
 	return updated, nil
 }
 
-func (c *operator) updateDistccStatus(distcc *k8ccv1alpha1.Distcc, updated bool) error {
+func (c *operator) updateDistccStatus(distcc *k8ccv1alpha1.Distcc, updated distccUpdateState) error {
 	// Get the leases from the desired state and serialize it into the
 	// DistccState version. If the state hasn't changed, then don't
 	// update the distcc object
@@ -453,7 +461,7 @@ func (c *operator) updateDistccStatus(distcc *k8ccv1alpha1.Distcc, updated bool)
 			AssignedHosts:  hosts,
 		}
 	}
-	if !updated && isStateEqual(leasesState, distcc.Status.Leases) {
+	if !updated.Any() && isStateEqual(leasesState, distcc.Status.Leases) {
 		return nil
 	}
 
@@ -461,14 +469,14 @@ func (c *operator) updateDistccStatus(distcc *k8ccv1alpha1.Distcc, updated bool)
 	// You can use DeepCopy() to make a deep copy of original object and modify this copy
 	// Or create a copy manually for better performance
 	distccCopy := distcc.DeepCopy()
-	distccCopy.Status.LastTransitionTime = toKubeTime(time.Now())
+	now := toKubeTime(time.Now())
+	distccCopy.Status.LastUpdateTime = now
+	if updated.StatefulScaled {
+		distccCopy.Status.LastScaleTime = now
+	}
 	distccCopy.Status.Leases = leasesState
 	_, err := c.k8ccclientset.K8ccV1alpha1().Distccs(distcc.Namespace).Update(distccCopy)
-	if err != nil {
-		return err
-	}
-	c.recorder.Event(distcc, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
-	return nil
+	return err
 }
 
 // enqueueDistcc takes a StatefulSet resource and converts it into a
@@ -593,6 +601,30 @@ func newService(distcc *k8ccv1alpha1.Distcc) *corev1.Service {
 	}
 }
 
+func needScale(distcc *k8ccv1alpha1.Distcc, stateful *appsv1beta2.StatefulSet, desiredReplicas int32) bool {
+	if stateful.Spec.Replicas == nil {
+		// The replicas are not set
+		return true
+	}
+	currentReplicas := *stateful.Spec.Replicas
+
+	switch {
+	case currentReplicas < desiredReplicas:
+		// Upscale always allowed
+		return true
+	case currentReplicas == desiredReplicas:
+		// Not needed
+		return false
+	}
+
+	// Downscale: check if the downscale window is respected
+	if distcc.Spec.DownscaleWindow == nil || distcc.Status.LastScaleTime == nil {
+		return true
+	}
+	nextAllowedTime := distcc.Status.LastScaleTime.Add(distcc.Spec.DownscaleWindow.Duration)
+	return time.Now().After(nextAllowedTime)
+}
+
 func toKubeTime(t time.Time) *metav1.Time {
 	// It's necessary to truncate nanoseconds to allow correct comparison
 	r := metav1.NewTime(t).Rfc3339Copy()
@@ -620,6 +652,18 @@ func isStateEqual(a, b []k8ccv1alpha1.DistccLease) bool {
 		}
 	}
 	return true
+}
+
+type distccUpdateState struct {
+	StatefulCreated bool
+	StatefulScaled  bool
+	ServiceCreated  bool
+}
+
+func (d distccUpdateState) Any() bool {
+	return d.StatefulCreated ||
+		d.StatefulScaled ||
+		d.ServiceCreated
 }
 
 // DesiredStateProvider provides the numebr of desired replicas for a certain tag
