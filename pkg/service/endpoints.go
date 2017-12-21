@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/go-kit/kit/endpoint"
 
@@ -24,8 +25,9 @@ func MakeEndpoints(s Service) Endpoints {
 func MakePutLeaseUserEndpoint(s Service) endpoint.Endpoint {
 	return func(ctx context.Context, request interface{}) (response interface{}, err error) {
 		req := request.(putLeaseUserRequest)
-		t, err := s.LeaseUser(ctx, data.User(req.User), data.Tag{Namespace: req.Namespace, Name: req.Tag})
-		return putLeaseUserResponse{t, err}, nil
+		lu, err := s.LeaseUser(ctx, data.User(req.User), data.Tag{Namespace: req.Namespace, Name: req.Tag})
+		roundTimestamp(&lu.Expiration) // prevent the ugly Json timestamp with nanoseconds
+		return putLeaseUserResponse{lu, err}, nil
 	}
 }
 
@@ -41,3 +43,7 @@ type putLeaseUserResponse struct {
 }
 
 func (r putLeaseUserResponse) error() error { return r.Err }
+
+func roundTimestamp(t *time.Time) {
+	*t = t.Round(time.Second)
+}
