@@ -236,7 +236,7 @@ func (c *operator) processNextWorkItem() bool {
 			// Forget here else we'd go into a loop of attempting to
 			// process a work item that is invalid.
 			c.workqueue.Forget(obj)
-			runtime.HandleError(fmt.Errorf("expected string in workqueue but got %#v", obj))
+			runtime.HandleError(errors.Errorf("expected string in workqueue but got %#v", obj))
 			return nil
 		}
 		// Run the syncHandler, passing it the namespace/name string of the
@@ -269,7 +269,7 @@ func (c *operator) syncHandler(key string) error {
 	// Convert the namespace/name string into a distinct namespace and name
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
-		runtime.HandleError(fmt.Errorf("invalid resource key: %s", key))
+		runtime.HandleError(errors.Errorf("invalid resource key: %s", key))
 		return nil
 	}
 
@@ -279,21 +279,41 @@ func (c *operator) syncHandler(key string) error {
 		// The Distcc resource may no longer exist, in which case we stop
 		// processing.
 		if kubeerr.IsNotFound(err) {
-			runtime.HandleError(fmt.Errorf("distcc '%s' in work queue no longer exists", key))
+			runtime.HandleError(errors.Errorf("distcc '%s' in work queue no longer exists", key))
 			return nil
 		}
 		return err
 	}
+
+	updated, err := c.syncStatefulSet(distcc)
+	if err != nil {
+		// If an error is transient, we'll requeue the item so we can attempt
+		// processing again later. This could have been caused by a
+		// temporary network failure, or any other transient reason.
+		// Otherwise we just fail permanently
+		if IsTransient(err) {
+			return err
+		}
+		runtime.HandleError(err)
+		return nil
+	}
+
+	// Finally, we update the status block of the Distcc resource to reflect the
+	// current state of the world
+	err = c.updateDistccStatus(distcc, updated)
+	return err
+}
+
+func (c *operator) syncStatefulSet(distcc *k8ccv1alpha1.Distcc) (bool, error) {
 	// The build tag is the name of the Distcc resource
-	tag := data.Tag{Namespace: namespace, Name: name}
+	tag := data.Tag{Namespace: distcc.Namespace, Name: distcc.Name}
 
 	statefulName := distcc.Spec.DeploymentName
 	if statefulName == "" {
 		// We choose to absorb the error here as the worker would requeue the
 		// resource otherwise. Instead, the next time the resource is updated
 		// the resource will be queued again.
-		runtime.HandleError(fmt.Errorf("%s: deployment name must be specified", key))
-		return nil
+		return false, errors.Errorf("%s: deployment name must be specified", tag)
 	}
 
 	// Get the statefulset with the name specified in Distcc.spec
@@ -310,7 +330,7 @@ func (c *operator) syncHandler(key string) error {
 	// attempt processing again later. This could have been caused by a
 	// temporary network failure, or any other transient reason.
 	if err != nil {
-		return err
+		return updated, transientError{err}
 	}
 
 	// If the StatefulSet is not controlled by this Distcc resource, we should log
@@ -318,14 +338,14 @@ func (c *operator) syncHandler(key string) error {
 	if !metav1.IsControlledBy(stateful, distcc) {
 		msg := fmt.Sprintf(MessageResourceExists, stateful.Name)
 		c.recorder.Event(distcc, corev1.EventTypeWarning, ErrResourceExists, msg)
-		return fmt.Errorf(msg)
+		return updated, transientError{errors.Errorf(msg)}
 	}
 
 	// Update the number of replicas, in case it doesn't match the desired
 	desiredReplicas := c.desiredState.Replicas(tag)
 	if stateful.Spec.Replicas == nil || *stateful.Spec.Replicas != desiredReplicas {
 		new := newStatefulSet(distcc, &desiredReplicas)
-		stateful, err = c.kubeclientset.AppsV1beta2().StatefulSets(distcc.Namespace).Update(new)
+		_, err = c.kubeclientset.AppsV1beta2().StatefulSets(distcc.Namespace).Update(new)
 		updated = true
 	}
 
@@ -333,16 +353,13 @@ func (c *operator) syncHandler(key string) error {
 	// attempt processing again later. This could have been caused by a
 	// temporary network failure, or any other transient reason.
 	if err != nil {
-		return err
+		return updated, transientError{err}
 	}
 
-	// Finally, we update the status block of the Distcc resource to reflect the
-	// current state of the world
-	err = c.updateDistccStatus(distcc, stateful, updated)
-	return err
+	return updated, nil
 }
 
-func (c *operator) updateDistccStatus(distcc *k8ccv1alpha1.Distcc, statefulset *appsv1beta2.StatefulSet, updated bool) error {
+func (c *operator) updateDistccStatus(distcc *k8ccv1alpha1.Distcc, updated bool) error {
 	// Get the leases from the desired state and serialize it into the
 	// DistccState version. If the state hasn't changed, then don't
 	// update the distcc object
@@ -416,12 +433,12 @@ func (c *operator) handleObject(obj interface{}) {
 	if object, ok = obj.(metav1.Object); !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			runtime.HandleError(fmt.Errorf("error decoding object, invalid type"))
+			runtime.HandleError(errors.Errorf("error decoding object, invalid type"))
 			return
 		}
 		object, ok = tombstone.Obj.(metav1.Object)
 		if !ok {
-			runtime.HandleError(fmt.Errorf("error decoding object tombstone, invalid type"))
+			runtime.HandleError(errors.Errorf("error decoding object tombstone, invalid type"))
 			return
 		}
 		_ = c.logger.Log("method", "handleObject", "recovered tombstone", object.GetName())
@@ -513,3 +530,20 @@ type DesiredStateProvider interface {
 	// Leases returns all the active leases
 	Leases(t data.Tag) []data.Lease
 }
+
+// IsTransient returns true if an error is transient
+func IsTransient(err error) bool {
+	te, ok := errors.Cause(err).(transient)
+	return ok && te.Transient()
+}
+
+type transient interface {
+	Transient() bool
+}
+
+type transientError struct {
+	error
+}
+
+func (e transientError) Error() string   { return e.error.Error() }
+func (e transientError) Transient() bool { return true }
