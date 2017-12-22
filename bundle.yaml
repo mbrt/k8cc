@@ -8,7 +8,32 @@ spec:
   names:
     kind: Distcc
     plural: distccs
+    singular: distcc
   scope: Namespaced
+  validation:
+    openAPIV3Schema:
+      required:
+        - deploymentName
+        - serviceName
+        - maxReplicas
+        - leaseDuration
+      properties:
+        spec:
+          properties:
+            deploymentName:
+              type: string
+            serviceName:
+              type: string
+            minReplicas:
+              type: integer
+            maxReplicas:
+              type: integer
+            leaseDuration:
+              type: string
+              pattern: "^[+]?([0-9]*(\\.[0-9]*)?(s|m|h)+)+"
+            downscaleWindow:
+              type: string
+              pattern: "^[+]?([0-9]*(\\.[0-9]*)?(s|m|h)+)+"
 ---
 apiVersion: rbac.authorization.k8s.io/v1beta1
 kind: ClusterRoleBinding
