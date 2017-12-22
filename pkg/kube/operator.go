@@ -411,10 +411,6 @@ func (c *operator) syncService(distcc *k8ccv1alpha1.Distcc) (bool, error) {
 		return false, errors.Errorf("%s: service name must be specified", tag)
 	}
 
-	if distcc.Spec.Selector == nil || len(distcc.Spec.Selector.MatchExpressions) > 0 {
-		return false, errors.Errorf("%s: selector must present, and be a 'matchLabels'", tag)
-	}
-
 	// Get the service with the name specified in Distcc.Spec
 	updated := false
 	service, err := c.serviceLister.Services(distcc.Namespace).Get(serviceName)
@@ -578,6 +574,10 @@ func newStatefulSet(distcc *k8ccv1alpha1.Distcc, replicas *int32) *appsv1beta2.S
 }
 
 func newService(distcc *k8ccv1alpha1.Distcc) *corev1.Service {
+	var selector map[string]string
+	if distcc.Spec.Selector != nil {
+		selector = distcc.Spec.Selector.MatchLabels
+	}
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      distcc.Spec.ServiceName,
@@ -595,7 +595,7 @@ func newService(distcc *k8ccv1alpha1.Distcc) *corev1.Service {
 			Ports: []corev1.ServicePort{
 				{Port: DistccPort},
 			},
-			Selector:  distcc.Spec.Selector.MatchLabels,
+			Selector:  selector,
 			ClusterIP: "None",
 		},
 	}
