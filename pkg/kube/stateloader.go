@@ -56,6 +56,6 @@ func toLease(dl k8ccv1alpha1.DistccLease) data.Lease {
 	return data.Lease{
 		User:       data.User(dl.UserName),
 		Expiration: dl.ExpirationTime.Time,
-		Hosts:      toHostIDs(dl.AssignedHosts),
+		Hosts:      toHostIDs(dl.AssignedOrdinals),
 	}
 }

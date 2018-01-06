@@ -1,5 +1,5 @@
 /*
-Copyright 2017 The Kubernetes Authors.
+Copyright 2018 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -26,6 +26,10 @@ import (
 type Interface interface {
 	// Distccs returns a DistccInformer.
 	Distccs() DistccInformer
+	// DistccClients returns a DistccClientInformer.
+	DistccClients() DistccClientInformer
+	// DistccClientClaims returns a DistccClientClaimInformer.
+	DistccClientClaims() DistccClientClaimInformer
 }
 
 type version struct {
@@ -40,4 +44,14 @@ func New(f internalinterfaces.SharedInformerFactory) Interface {
 // Distccs returns a DistccInformer.
 func (v *version) Distccs() DistccInformer {
 	return &distccInformer{factory: v.SharedInformerFactory}
+}
+
+// DistccClients returns a DistccClientInformer.
+func (v *version) DistccClients() DistccClientInformer {
+	return &distccClientInformer{factory: v.SharedInformerFactory}
+}
+
+// DistccClientClaims returns a DistccClientClaimInformer.
+func (v *version) DistccClientClaims() DistccClientClaimInformer {
+	return &distccClientClaimInformer{factory: v.SharedInformerFactory}
 }

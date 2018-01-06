@@ -1,5 +1,5 @@
 /*
-Copyright 2017 The Kubernetes Authors.
+Copyright 2018 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -26,6 +26,8 @@ import (
 type K8ccV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	DistccsGetter
+	DistccClientsGetter
+	DistccClientClaimsGetter
 }
 
 // K8ccV1alpha1Client is used to interact with features provided by the k8cc.io group.
@@ -35,6 +37,14 @@ type K8ccV1alpha1Client struct {
 
 func (c *K8ccV1alpha1Client) Distccs(namespace string) DistccInterface {
 	return newDistccs(c, namespace)
+}
+
+func (c *K8ccV1alpha1Client) DistccClients(namespace string) DistccClientInterface {
+	return newDistccClients(c, namespace)
+}
+
+func (c *K8ccV1alpha1Client) DistccClientClaims(namespace string) DistccClientClaimInterface {
+	return newDistccClientClaims(c, namespace)
 }
 
 // NewForConfig creates a new K8ccV1alpha1Client for the given config.

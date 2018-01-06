@@ -452,9 +452,9 @@ func (c *operator) updateDistccStatus(distcc *k8ccv1alpha1.Distcc, updated distc
 			hosts[i] = int32(h)
 		}
 		leasesState[i] = k8ccv1alpha1.DistccLease{
-			UserName:       string(lease.User),
-			ExpirationTime: *toKubeTime(lease.Expiration),
-			AssignedHosts:  hosts,
+			UserName:         string(lease.User),
+			ExpirationTime:   *toKubeTime(lease.Expiration),
+			AssignedOrdinals: hosts,
 		}
 	}
 	if !updated.Any() && isStateEqual(leasesState, distcc.Status.Leases) {
@@ -642,11 +642,11 @@ func isStateEqual(a, b []k8ccv1alpha1.DistccLease) bool {
 		lb := b[i]
 		if la.UserName != lb.UserName ||
 			!la.ExpirationTime.Equal(&lb.ExpirationTime) ||
-			len(la.AssignedHosts) != len(lb.AssignedHosts) {
+			len(la.AssignedOrdinals) != len(lb.AssignedOrdinals) {
 			return false
 		}
-		for i := range la.AssignedHosts {
-			if la.AssignedHosts[i] != lb.AssignedHosts[i] {
+		for i := range la.AssignedOrdinals {
+			if la.AssignedOrdinals[i] != lb.AssignedOrdinals[i] {
 				return false
 			}
 		}

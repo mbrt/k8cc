@@ -30,44 +30,44 @@ import (
 	time "time"
 )
 
-// DistccInformer provides access to a shared informer and lister for
-// Distccs.
-type DistccInformer interface {
+// DistccClientInformer provides access to a shared informer and lister for
+// DistccClients.
+type DistccClientInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1alpha1.DistccLister
+	Lister() v1alpha1.DistccClientLister
 }
 
-type distccInformer struct {
+type distccClientInformer struct {
 	factory internalinterfaces.SharedInformerFactory
 }
 
-// NewDistccInformer constructs a new informer for Distcc type.
+// NewDistccClientInformer constructs a new informer for DistccClient type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewDistccInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
+func NewDistccClientInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
-				return client.K8ccV1alpha1().Distccs(namespace).List(options)
+				return client.K8ccV1alpha1().DistccClients(namespace).List(options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
-				return client.K8ccV1alpha1().Distccs(namespace).Watch(options)
+				return client.K8ccV1alpha1().DistccClients(namespace).Watch(options)
 			},
 		},
-		&k8cc_io_v1alpha1.Distcc{},
+		&k8cc_io_v1alpha1.DistccClient{},
 		resyncPeriod,
 		indexers,
 	)
 }
 
-func defaultDistccInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewDistccInformer(client, v1.NamespaceAll, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+func defaultDistccClientInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
+	return NewDistccClientInformer(client, v1.NamespaceAll, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 }
 
-func (f *distccInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&k8cc_io_v1alpha1.Distcc{}, defaultDistccInformer)
+func (f *distccClientInformer) Informer() cache.SharedIndexInformer {
+	return f.factory.InformerFor(&k8cc_io_v1alpha1.DistccClient{}, defaultDistccClientInformer)
 }
 
-func (f *distccInformer) Lister() v1alpha1.DistccLister {
-	return v1alpha1.NewDistccLister(f.Informer().GetIndexer())
+func (f *distccClientInformer) Lister() v1alpha1.DistccClientLister {
+	return v1alpha1.NewDistccClientLister(f.Informer().GetIndexer())
 }

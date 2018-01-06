@@ -1,5 +1,5 @@
 /*
-Copyright 2017 The Kubernetes Authors.
+Copyright 2018 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -28,6 +28,14 @@ type FakeK8ccV1alpha1 struct {
 
 func (c *FakeK8ccV1alpha1) Distccs(namespace string) v1alpha1.DistccInterface {
 	return &FakeDistccs{c, namespace}
+}
+
+func (c *FakeK8ccV1alpha1) DistccClients(namespace string) v1alpha1.DistccClientInterface {
+	return &FakeDistccClients{c, namespace}
+}
+
+func (c *FakeK8ccV1alpha1) DistccClientClaims(namespace string) v1alpha1.DistccClientClaimInterface {
+	return &FakeDistccClientClaims{c, namespace}
 }
 
 // RESTClient returns a RESTClient that is used to communicate

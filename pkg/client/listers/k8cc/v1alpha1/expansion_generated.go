@@ -1,5 +1,5 @@
 /*
-Copyright 2017 The Kubernetes Authors.
+Copyright 2018 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,3 +25,19 @@ type DistccListerExpansion interface{}
 // DistccNamespaceListerExpansion allows custom methods to be added to
 // DistccNamespaceLister.
 type DistccNamespaceListerExpansion interface{}
+
+// DistccClientListerExpansion allows custom methods to be added to
+// DistccClientLister.
+type DistccClientListerExpansion interface{}
+
+// DistccClientNamespaceListerExpansion allows custom methods to be added to
+// DistccClientNamespaceLister.
+type DistccClientNamespaceListerExpansion interface{}
+
+// DistccClientClaimListerExpansion allows custom methods to be added to
+// DistccClientClaimLister.
+type DistccClientClaimListerExpansion interface{}
+
+// DistccClientClaimNamespaceListerExpansion allows custom methods to be added to
+// DistccClientClaimNamespaceLister.
+type DistccClientClaimNamespaceListerExpansion interface{}

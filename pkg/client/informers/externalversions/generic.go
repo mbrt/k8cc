@@ -1,5 +1,5 @@
 /*
-Copyright 2017 The Kubernetes Authors.
+Copyright 2018 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -54,6 +54,10 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 	// Group=K8cc, Version=V1alpha1
 	case v1alpha1.SchemeGroupVersion.WithResource("distccs"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.K8cc().V1alpha1().Distccs().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("distccclients"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.K8cc().V1alpha1().DistccClients().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("distccclientclaims"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.K8cc().V1alpha1().DistccClientClaims().Informer()}, nil
 
 	}
 

@@ -59,8 +59,8 @@ type DistccStatus struct {
 type DistccLease struct {
 	UserName       string      `json:"userName"`
 	ExpirationTime metav1.Time `json:"expirationTime"`
-	// AssignedHosts represents the ID of the hosts assigned to the user
-	AssignedHosts []int32 `json:"assignedHosts"`
+	// AssignedOrdinals represents the ordinal of the hosts assigned to the user
+	AssignedOrdinals []int32 `json:"assignedOrdinals"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -72,4 +72,74 @@ type DistccList struct {
 	metav1.ListMeta `json:"metadata"`
 
 	Items []Distcc `json:"items"`
+}
+
+// +genclient
+// +genclient:noStatus
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +resource:path=distccclient
+
+// DistccClient is a specification for a DistccClient resource
+type DistccClient struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec DistccClientSpec `json:"spec"`
+}
+
+// DistccClientSpec is the spec for a DistccClient resource
+type DistccClientSpec struct {
+	DeploymentName string                `json:"deploymentName"`
+	LeaseDuration  metav1.Duration       `json:"leaseDuration"`
+	Selector       *metav1.LabelSelector `json:"selector,omitempty"`
+	Template       v1.PodTemplateSpec    `json:"template"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +resource:path=distccclients
+
+// DistccClientList is a list of DistccClient resources
+type DistccClientList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata"`
+
+	Items []DistccClient `json:"items"`
+}
+
+// +genclient
+// +genclient:noStatus
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +resource:path=distccclientclaim
+
+// DistccClientClaim represents a request for a client POD from a user
+type DistccClientClaim struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   DistccClientClaimSpec   `json:"spec"`
+	Status DistccClientClaimStatus `json:"status"`
+}
+
+// DistccClientClaimSpec contains info about a user lease
+type DistccClientClaimSpec struct {
+	UserName string               `json:"userName"`
+	Secrets  []v1.ObjectReference `json:"secrets"`
+}
+
+// DistccClientClaimStatus is the status for a DistccClientClaim resource
+type DistccClientClaimStatus struct {
+	ExpirationTime *metav1.Time             `json:"expirationTime"`
+	Pod            *v1.LocalObjectReference `json:"pod"`
+	Service        *v1.LocalObjectReference `json:"service"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +resource:path=distccclientclaims
+
+// DistccClientClaimList is a list of DistccClientClaim resources
+type DistccClientClaimList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata"`
+
+	Items []DistccClientClaim `json:"items"`
 }
