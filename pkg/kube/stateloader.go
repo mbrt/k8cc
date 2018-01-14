@@ -17,7 +17,7 @@ type StateLoader struct {
 // NewStateLoader makes a new StateLoader starting from an already connected client
 func NewStateLoader(client *SharedClient) StateLoader {
 	return StateLoader{
-		k8ccclientset: client.k8ccclientset,
+		k8ccclientset: client.K8ccClientset,
 	}
 }
 

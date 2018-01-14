@@ -13,10 +13,10 @@ import (
 
 // SharedClient provides a shared connection for all operators
 type SharedClient struct {
-	kubeclientset         kubernetes.Interface
-	k8ccclientset         clientset.Interface
-	kubeInformerFactory   kubeinformers.SharedInformerFactory
-	distccInformerFactory informers.SharedInformerFactory
+	KubeClientset         kubernetes.Interface
+	K8ccClientset         clientset.Interface
+	KubeInformerFactory   kubeinformers.SharedInformerFactory
+	DistccInformerFactory informers.SharedInformerFactory
 }
 
 // NewSharedClient creates a new connection to the kubernetes master.
@@ -39,17 +39,17 @@ func NewSharedClient(masterURL, kubecfg string) (*SharedClient, error) {
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, time.Second*30)
 	distccInformerFactory := informers.NewSharedInformerFactory(client, time.Second*30)
 	return &SharedClient{
-		kubeClient,
-		client,
-		kubeInformerFactory,
-		distccInformerFactory,
+		KubeClientset:         kubeClient,
+		K8ccClientset:         client,
+		KubeInformerFactory:   kubeInformerFactory,
+		DistccInformerFactory: distccInformerFactory,
 	}, nil
 }
 
 // Run starts the client connection, and sync the caches.
 func (c *SharedClient) Run(stopCh <-chan struct{}) error {
-	go c.kubeInformerFactory.Start(stopCh)
-	go c.distccInformerFactory.Start(stopCh)
+	go c.KubeInformerFactory.Start(stopCh)
+	go c.DistccInformerFactory.Start(stopCh)
 
 	<-stopCh
 	return nil

@@ -51,7 +51,7 @@ const (
 	DistccPort = 3632
 )
 
-const controllerAgentName = "k8cc-controller"
+const controllerAgentName = "k8cc-distcc-controller"
 
 // operator controls tag deployments as a regular Kubernetes operator
 type operator struct {
@@ -83,25 +83,25 @@ func NewOperator(
 	desiredState DesiredStateProvider,
 	logger log.Logger,
 ) Operator {
-	statefulsetInformer := sharedClient.kubeInformerFactory.Apps().V1beta2().StatefulSets()
-	serviceInformer := sharedClient.kubeInformerFactory.Core().V1().Services()
-	distccInformer := sharedClient.distccInformerFactory.K8cc().V1alpha1().Distccs()
+	statefulsetInformer := sharedClient.KubeInformerFactory.Apps().V1beta2().StatefulSets()
+	serviceInformer := sharedClient.KubeInformerFactory.Core().V1().Services()
+	distccInformer := sharedClient.DistccInformerFactory.K8cc().V1alpha1().Distccs()
 
 	// Create event broadcaster
-	// Add sample-controller types to the default Kubernetes Scheme so Events can be
+	// Add distcc types to the default Kubernetes Scheme so Events can be
 	// logged for sample-controller types.
 	k8ccscheme.AddToScheme(scheme.Scheme)
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(func(format string, args ...interface{}) {
 		_ = logger.Log("event", fmt.Sprintf(format, args...))
 	})
-	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: sharedClient.kubeclientset.CoreV1().Events("")})
+	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: sharedClient.KubeClientset.CoreV1().Events("")})
 
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	op := operator{
-		kubeclientset:     sharedClient.kubeclientset,
-		k8ccclientset:     sharedClient.k8ccclientset,
+		kubeclientset:     sharedClient.KubeClientset,
+		k8ccclientset:     sharedClient.K8ccClientset,
 		statefulsetLister: statefulsetInformer.Lister(),
 		statefulsetSynced: statefulsetInformer.Informer().HasSynced,
 		serviceLister:     serviceInformer.Lister(),
@@ -110,7 +110,7 @@ func NewOperator(
 		distccsSynced:     distccInformer.Informer().HasSynced,
 		desiredState:      desiredState,
 		logger:            logger,
-		workqueue:         workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "k8cc-stateful-sets"),
+		workqueue:         workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "k8cc-distcc"),
 		recorder:          recorder,
 	}
 
