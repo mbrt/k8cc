@@ -122,7 +122,7 @@ func NewOperator(
 			// updates to manage downscaling periodically
 			op.enqueueDistcc(new)
 		},
-		DeleteFunc: op.deleteDistcc,
+		DeleteFunc: op.enqueueDistcc,
 	})
 
 	// Set up an event handler for when StatefulSet resources change. This
@@ -170,7 +170,7 @@ func (c *operator) Run(threadiness int, stopCh <-chan struct{}) error {
 	defer runtime.HandleCrash()
 	defer c.workqueue.ShutDown()
 
-	if ok := cache.WaitForCacheSync(stopCh, c.statefulsetSynced, c.distccsSynced); !ok {
+	if ok := cache.WaitForCacheSync(stopCh, c.statefulsetSynced, c.serviceSynced, c.distccsSynced); !ok {
 		return errors.New("failed to wait for caches to sync")
 	}
 
@@ -486,20 +486,6 @@ func (c *operator) enqueueDistcc(obj interface{}) {
 		return
 	}
 	c.workqueue.AddRateLimited(key)
-}
-
-// enqueueDistcc takes a Distcc resource and converts it into a
-// namespace/name string which is then put onto the work queue. This method
-// should *not* be passed resources of any type other than Distcc.
-func (c *operator) deleteDistcc(obj interface{}) {
-	var key string
-	var err error
-	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
-		runtime.HandleError(err)
-		return
-	}
-	// the object is gone: delete it from the queue
-	c.workqueue.Forget(key)
 }
 
 // handleObject will take any resource implementing metav1.Object and attempt

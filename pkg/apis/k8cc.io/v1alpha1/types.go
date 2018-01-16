@@ -122,8 +122,9 @@ type DistccClientClaim struct {
 
 // DistccClientClaimSpec contains info about a user lease
 type DistccClientClaimSpec struct {
-	UserName string               `json:"userName"`
-	Secrets  []v1.ObjectReference `json:"secrets"`
+	DistccClientName string               `json:"distccClientName"`
+	UserName         string               `json:"userName"`
+	Secrets          []v1.ObjectReference `json:"secrets"`
 }
 
 // DistccClientClaimStatus is the status for a DistccClientClaim resource
