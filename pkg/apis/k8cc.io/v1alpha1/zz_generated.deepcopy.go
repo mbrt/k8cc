@@ -242,8 +242,8 @@ func (in *DistccClientClaimStatus) DeepCopyInto(out *DistccClientClaimStatus) {
 			(*in).DeepCopyInto(*out)
 		}
 	}
-	if in.Pod != nil {
-		in, out := &in.Pod, &out.Pod
+	if in.Deployment != nil {
+		in, out := &in.Deployment, &out.Deployment
 		if *in == nil {
 			*out = nil
 		} else {

@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-kit/kit/log"
 	"github.com/pkg/errors"
+	appsv1beta2 "k8s.io/api/apps/v1beta2"
 	corev1 "k8s.io/api/core/v1"
 	kubeerr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -14,7 +15,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
-	corelisters "k8s.io/client-go/listers/core/v1"
+	appslisters "k8s.io/client-go/listers/apps/v1beta2"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
@@ -23,6 +24,7 @@ import (
 	clientset "github.com/mbrt/k8cc/pkg/client/clientset/versioned"
 	k8ccscheme "github.com/mbrt/k8cc/pkg/client/clientset/versioned/scheme"
 	listers "github.com/mbrt/k8cc/pkg/client/listers/k8cc/v1alpha1"
+	"github.com/mbrt/k8cc/pkg/distcc"
 	"github.com/mbrt/k8cc/pkg/kube"
 )
 
@@ -38,7 +40,7 @@ func NewController(
 	sharedClient *kube.SharedClient,
 	logger log.Logger,
 ) Controller {
-	podInformer := sharedClient.KubeInformerFactory.Core().V1().Pods()
+	deployInformer := sharedClient.KubeInformerFactory.Apps().V1beta2().Deployments()
 	distccInformer := sharedClient.DistccInformerFactory.K8cc().V1alpha1().DistccClients()
 
 	// Create event broadcaster
@@ -54,13 +56,13 @@ func NewController(
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	op := controller{
-		distccsLister: distccInformer.Lister(),
-		distccsSynced: distccInformer.Informer().HasSynced,
-		podsLister:    podInformer.Lister(),
-		podsSynced:    podInformer.Informer().HasSynced,
-		logger:        logger,
-		workqueue:     workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "k8cc-distcc-client"),
-		recorder:      recorder,
+		distccsLister:     distccInformer.Lister(),
+		distccsSynced:     distccInformer.Informer().HasSynced,
+		deploymentsLister: deployInformer.Lister(),
+		deploymentsSynced: deployInformer.Informer().HasSynced,
+		logger:            logger,
+		workqueue:         workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "k8cc-distcc-client"),
+		recorder:          recorder,
 	}
 
 	// Set up an event handler for when Distcc resources change
@@ -74,14 +76,14 @@ func NewController(
 		DeleteFunc: op.enqueueDistccClient,
 	})
 
-	podInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+	deployInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: op.handleObject,
 		UpdateFunc: func(old, new interface{}) {
-			newPod := new.(*corev1.Pod)
-			oldPod := old.(*corev1.Pod)
-			if newPod.ResourceVersion == oldPod.ResourceVersion {
-				// Periodic resync will send update events for all known Pods.
-				// Two different versions of the same StatefulSet will always have different RVs.
+			newDeploy := new.(*appsv1beta2.Deployment)
+			oldDeploy := old.(*appsv1beta2.Deployment)
+			if newDeploy.ResourceVersion == oldDeploy.ResourceVersion {
+				// Periodic resync will send update events for all known Deployments.
+				// Two different versions of the same resource will always have different RVs.
 				return
 			}
 			op.handleObject(new)
@@ -95,8 +97,8 @@ func NewController(
 type controller struct {
 	kubeclientset      kubernetes.Interface
 	k8ccclientset      clientset.Interface
-	podsLister         corelisters.PodLister
-	podsSynced         cache.InformerSynced
+	deploymentsLister  appslisters.DeploymentLister
+	deploymentsSynced  cache.InformerSynced
 	distccsLister      listers.DistccClientLister
 	distccsSynced      cache.InformerSynced
 	distccclaimsLister listers.DistccClientClaimLister
@@ -118,7 +120,7 @@ func (c *controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	defer runtime.HandleCrash()
 	defer c.workqueue.ShutDown()
 
-	if ok := cache.WaitForCacheSync(stopCh, c.podsSynced, c.distccsSynced, c.distccclaimsSynced); !ok {
+	if ok := cache.WaitForCacheSync(stopCh, c.deploymentsSynced, c.distccsSynced, c.distccclaimsSynced); !ok {
 		return errors.New("failed to wait for caches to sync")
 	}
 
@@ -236,20 +238,55 @@ func (c *controller) syncHandler(key string) error {
 	claim = claim.DeepCopy()
 
 	// If the expiration time is not set, set it automatically
-	updated := c.updateExpiration(claim, dclient)
+	changed := componentsChange{}
+	changed.Expiration = c.updateExpiration(claim, dclient)
 
 	// Check expiration time, and delete
 	if c.isExpired(claim, dclient) {
 		return c.k8ccclientset.K8ccV1alpha1().DistccClientClaims(namespace).Delete(name, nil)
 	}
 
-	// Check the related POD
+	// Check the related Deployment
+	changed.Deploy, err = c.syncDeploy(claim, dclient)
+	if err != nil {
+		// If an error is transient, we'll requeue the item so we can attempt
+		// processing again later. This could have been caused by a
+		// temporary network failure, or any other transient reason.
+		// Otherwise we just fail permanently
+		if distcc.IsTransient(err) {
+			return err
+		}
+		runtime.HandleError(err)
+		return nil
+	}
 
-	if updated {
+	// Check the related Service
+
+	if changed.Any() {
 		_, err = c.k8ccclientset.K8ccV1alpha1().DistccClientClaims(namespace).Update(claim)
 	}
 
 	return err
+}
+
+func (c *controller) syncDeploy(claim *k8ccv1alpha1.DistccClientClaim, client *k8ccv1alpha1.DistccClient) (bool, error) {
+	if deployRef := claim.Status.Deployment; deployRef != nil {
+		_, err := c.deploymentsLister.Deployments(claim.Namespace).Get(deployRef.Name)
+		if err == nil {
+			// The deployment is here already, we're done
+			return false, nil
+		}
+		if !kubeerr.IsNotFound(err) {
+			// An error occurred during Get, we'll requeue the item so we can
+			// attempt processing again later. This could have been caused by
+			// a temprary network failure, or any other transient reason.
+			return false, distcc.TransientError(err)
+		}
+	}
+
+	// TODO: create the deploy
+
+	return false, nil
 }
 
 // enqueueDistccClient takes a DistccClient resource and converts it into a
@@ -331,4 +368,16 @@ func toKubeTime(t time.Time) *metav1.Time {
 	// It's necessary to truncate nanoseconds to allow correct comparison
 	r := metav1.NewTime(t).Rfc3339Copy()
 	return &r
+}
+
+type componentsChange struct {
+	Deploy     bool
+	Expiration bool
+	Service    bool
+}
+
+func (d componentsChange) Any() bool {
+	return d.Deploy ||
+		d.Expiration ||
+		d.Service
 }

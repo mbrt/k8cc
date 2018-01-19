@@ -31,6 +31,7 @@ import (
 	k8ccscheme "github.com/mbrt/k8cc/pkg/client/clientset/versioned/scheme"
 	listers "github.com/mbrt/k8cc/pkg/client/listers/k8cc/v1alpha1"
 	"github.com/mbrt/k8cc/pkg/data"
+	distccerr "github.com/mbrt/k8cc/pkg/distcc"
 )
 
 const (
@@ -313,7 +314,7 @@ func (c *operator) syncHandler(key string) error {
 		// processing again later. This could have been caused by a
 		// temporary network failure, or any other transient reason.
 		// Otherwise we just fail permanently
-		if IsTransient(err) {
+		if distccerr.IsTransient(err) {
 			return err
 		}
 		runtime.HandleError(err)
@@ -322,7 +323,7 @@ func (c *operator) syncHandler(key string) error {
 
 	update.ServiceCreated, err = c.syncService(distcc)
 	if err != nil {
-		if IsTransient(err) {
+		if distccerr.IsTransient(err) {
 			return err
 		}
 		runtime.HandleError(err)
@@ -369,7 +370,7 @@ func (c *operator) syncStatefulSet(distcc *k8ccv1alpha1.Distcc) (distccUpdateSta
 	// attempt processing again later. This could have been caused by a
 	// temporary network failure, or any other transient reason.
 	if err != nil {
-		return state, transientError{err}
+		return state, distccerr.TransientError(err)
 	}
 
 	// If the StatefulSet is not controlled by this Distcc resource, we should log
@@ -377,7 +378,7 @@ func (c *operator) syncStatefulSet(distcc *k8ccv1alpha1.Distcc) (distccUpdateSta
 	if !metav1.IsControlledBy(stateful, distcc) {
 		msg := fmt.Sprintf(MessageResourceExists, stateful.Name)
 		c.recorder.Event(distcc, corev1.EventTypeWarning, ErrResourceExists, msg)
-		return state, transientError{errors.Errorf(msg)}
+		return state, distccerr.TransientError(errors.Errorf(msg))
 	}
 
 	// Determine the desired replicas
@@ -391,7 +392,7 @@ func (c *operator) syncStatefulSet(distcc *k8ccv1alpha1.Distcc) (distccUpdateSta
 		// attempt processing again later. This could have been caused by a
 		// temporary network failure, or any other transient reason.
 		if err != nil {
-			return state, transientError{err}
+			return state, distccerr.TransientError(err)
 		}
 		state.StatefulScaled = true
 	}
@@ -425,7 +426,7 @@ func (c *operator) syncService(distcc *k8ccv1alpha1.Distcc) (bool, error) {
 	// attempt processing again later. This could have been caused by a
 	// temporary network failure, or any other transient reason.
 	if err != nil {
-		return updated, transientError{err}
+		return updated, distccerr.TransientError(err)
 	}
 
 	// If the Service is not controlled by this Distcc resource, we should log
@@ -433,7 +434,7 @@ func (c *operator) syncService(distcc *k8ccv1alpha1.Distcc) (bool, error) {
 	if !metav1.IsControlledBy(service, distcc) {
 		msg := fmt.Sprintf(MessageResourceExists, service.Name)
 		c.recorder.Event(distcc, corev1.EventTypeWarning, ErrResourceExists, msg)
-		return updated, transientError{errors.Errorf(msg)}
+		return updated, distccerr.TransientError(errors.Errorf(msg))
 	}
 
 	return updated, nil
@@ -660,20 +661,3 @@ type DesiredStateProvider interface {
 	// Leases returns all the active leases
 	Leases(t data.Tag) []data.Lease
 }
-
-// IsTransient returns true if an error is transient
-func IsTransient(err error) bool {
-	te, ok := errors.Cause(err).(transient)
-	return ok && te.Transient()
-}
-
-type transient interface {
-	Transient() bool
-}
-
-type transientError struct {
-	error
-}
-
-func (e transientError) Error() string   { return e.error.Error() }
-func (e transientError) Transient() bool { return true }
