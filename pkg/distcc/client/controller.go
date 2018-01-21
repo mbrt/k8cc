@@ -10,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	kubeerr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
@@ -29,6 +30,21 @@ import (
 )
 
 const controllerAgentName = "k8cc-distcc-client-controller"
+
+const (
+	// SuccessSynced is used as part of the Event 'reason' when a Distcc is synced
+	SuccessSynced = "Synced"
+	// ErrResourceExists is used as part of the Event 'reason' when a Distcc fails
+	// to sync due to a StatefulSet of the same name already existing.
+	ErrResourceExists = "ErrResourceExists"
+
+	// MessageResourceExists is the message used for Events when a resource
+	// fails to sync due to a StatefulSet already existing
+	MessageResourceExists = "Resource %q already exists and is not managed by DistccClientClaim"
+	// MessageResourceSynced is the message used for an Event fired when a Distcc
+	// is synced successfully
+	MessageResourceSynced = "DistccClientClaim synced successfully"
+)
 
 // Controller is responsible for DistccClient and DistccClientClaim objects management
 type Controller interface {
@@ -261,6 +277,21 @@ func (c *controller) syncHandler(key string) error {
 	}
 
 	// Check the related Service
+	changed.Service, err = c.syncService(claim, dclient)
+	if err != nil {
+		if distcc.IsTransient(err) {
+			return err
+		}
+		runtime.HandleError(err)
+		return nil
+	}
+
+	// Finally, we update the status block of the resource to reflect the
+	// current state of the world
+	err = c.updateClaimStatus(claim, changed)
+	if err != nil {
+		return err
+	}
 
 	if changed.Any() {
 		_, err = c.k8ccclientset.K8ccV1alpha1().DistccClientClaims(namespace).Update(claim)
@@ -270,6 +301,8 @@ func (c *controller) syncHandler(key string) error {
 }
 
 func (c *controller) syncDeploy(claim *k8ccv1alpha1.DistccClientClaim, client *k8ccv1alpha1.DistccClient) (bool, error) {
+	// TODO: - add claim specific labels to deploy
+	//       - fix the deploy ref in the state
 	if deployRef := claim.Status.Deployment; deployRef != nil {
 		_, err := c.deploymentsLister.Deployments(claim.Namespace).Get(deployRef.Name)
 		if err == nil {
@@ -284,9 +317,35 @@ func (c *controller) syncDeploy(claim *k8ccv1alpha1.DistccClientClaim, client *k
 		}
 	}
 
-	// TODO: create the deploy
+	new := newDeploy(claim, client)
+	deploy, err := c.kubeclientset.AppsV1beta2().Deployments(claim.Namespace).Create(new)
 
+	// If an error occurs during Get/Create, we'll requeue the item so we can
+	// attempt processing again later. This could have been caused by a
+	// temporary network failure, or any other transient reason.
+	if err != nil {
+		return true, distcc.TransientError(err)
+	}
+
+	// If the Deployment is not controlled by this Distcc resource, we should log
+	// a warning to the event recorder and ret
+	if !metav1.IsControlledBy(deploy, claim) {
+		msg := fmt.Sprintf(MessageResourceExists, deploy.Name)
+		c.recorder.Event(claim, corev1.EventTypeWarning, ErrResourceExists, msg)
+		return true, distcc.TransientError(errors.Errorf(msg))
+	}
+
+	return true, nil
+}
+
+func (c *controller) syncService(claim *k8ccv1alpha1.DistccClientClaim, client *k8ccv1alpha1.DistccClient) (bool, error) {
+	// TODO
 	return false, nil
+}
+
+func (c *controller) updateClaimStatus(claim *k8ccv1alpha1.DistccClientClaim, update componentsChange) error {
+	// TODO
+	return nil
 }
 
 // enqueueDistccClient takes a DistccClient resource and converts it into a
@@ -362,6 +421,32 @@ func (c *controller) updateExpiration(claim *k8ccv1alpha1.DistccClientClaim, cli
 
 func (c *controller) isExpired(claim *k8ccv1alpha1.DistccClientClaim, client *k8ccv1alpha1.DistccClient) bool {
 	return claim.Status.ExpirationTime.After(time.Now())
+}
+
+func newDeploy(claim *k8ccv1alpha1.DistccClientClaim, client *k8ccv1alpha1.DistccClient) *appsv1beta2.Deployment {
+	var replicas int32 = 1 // always one POD per client
+	return &appsv1beta2.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: fmt.Sprintf("%s-", claim.Name),
+			Namespace:    claim.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(claim, schema.GroupVersionKind{
+					Group:   k8ccv1alpha1.SchemeGroupVersion.Group,
+					Version: k8ccv1alpha1.SchemeGroupVersion.Version,
+					Kind:    "DistccClientClaim",
+				}),
+			},
+			Labels: client.Labels,
+		},
+		Spec: appsv1beta2.DeploymentSpec{
+			Replicas: &replicas,
+			Selector: client.Spec.Selector,
+			Template: client.Spec.Template,
+			Strategy: appsv1beta2.DeploymentStrategy{
+				Type: appsv1beta2.RollingUpdateDeploymentStrategyType,
+			},
+		},
+	}
 }
 
 func toKubeTime(t time.Time) *metav1.Time {
