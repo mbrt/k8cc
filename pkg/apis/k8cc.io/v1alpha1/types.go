@@ -130,7 +130,6 @@ type DistccClientClaimSpec struct {
 // DistccClientClaimStatus is the status for a DistccClientClaim resource
 type DistccClientClaimStatus struct {
 	ExpirationTime *metav1.Time             `json:"expirationTime"`
-	Deployment     *v1.LocalObjectReference `json:"deployment"`
 	Service        *v1.LocalObjectReference `json:"service"`
 }
 

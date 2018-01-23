@@ -10,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	kubeerr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -35,15 +36,24 @@ const (
 	// SuccessSynced is used as part of the Event 'reason' when a Distcc is synced
 	SuccessSynced = "Synced"
 	// ErrResourceExists is used as part of the Event 'reason' when a Distcc fails
-	// to sync due to a StatefulSet of the same name already existing.
+	// to sync due to a Deployment of the same name already existing.
 	ErrResourceExists = "ErrResourceExists"
+	// ErrAmbiguousLabels is used as part of the Event 'reason' when a Distcc fails
+	// to sync due to multiple deployment satisfying the label selector.
+	ErrAmbiguousLabels = "ErrAmbiguousMatch"
 
 	// MessageResourceExists is the message used for Events when a resource
-	// fails to sync due to a StatefulSet already existing
+	// fails to sync due to a Deployment already existing
 	MessageResourceExists = "Resource %q already exists and is not managed by DistccClientClaim"
 	// MessageResourceSynced is the message used for an Event fired when a Distcc
 	// is synced successfully
 	MessageResourceSynced = "DistccClientClaim synced successfully"
+	// MessageAmbiguousLabels is the message used for an Event fired when a Distcc
+	// already exists with the same labels
+	MessageAmbiguousLabels = "Multiple deployments (%d) satisfy the label selector. Only one should"
+
+	// UserLabel is the label used to identify a resource given to a particular user
+	UserLabel = "k8cc.io/username"
 )
 
 // Controller is responsible for DistccClient and DistccClientClaim objects management
@@ -301,20 +311,23 @@ func (c *controller) syncHandler(key string) error {
 }
 
 func (c *controller) syncDeploy(claim *k8ccv1alpha1.DistccClientClaim, client *k8ccv1alpha1.DistccClient) (bool, error) {
-	// TODO: - add claim specific labels to deploy
-	//       - fix the deploy ref in the state
-	if deployRef := claim.Status.Deployment; deployRef != nil {
-		_, err := c.deploymentsLister.Deployments(claim.Namespace).Get(deployRef.Name)
-		if err == nil {
-			// The deployment is here already, we're done
-			return false, nil
-		}
-		if !kubeerr.IsNotFound(err) {
-			// An error occurred during Get, we'll requeue the item so we can
-			// attempt processing again later. This could have been caused by
-			// a temprary network failure, or any other transient reason.
-			return false, distcc.TransientError(err)
-		}
+	userLabels := labels.Set(getLabelsForUser(client.Labels, claim.Spec.UserName))
+	deploys, err := c.deploymentsLister.Deployments(claim.Namespace).List(userLabels.AsSelector())
+	if err != nil && !kubeerr.IsNotFound(err) {
+		// An error occurred during Get, we'll requeue the item so we can
+		// attempt processing again later. This could have been caused by
+		// a temprary network failure, or any other transient reason.
+		return false, distcc.TransientError(err)
+	}
+	if len(deploys) > 1 {
+		// More than one deployment exists with the labels
+		msg := fmt.Sprintf(MessageAmbiguousLabels, len(deploys))
+		c.recorder.Event(claim, corev1.EventTypeWarning, ErrAmbiguousLabels, msg)
+		return true, distcc.TransientError(errors.Errorf(msg))
+	}
+	if len(deploys) == 1 {
+		// The deployment is here already, we're done
+		return false, nil
 	}
 
 	new := newDeploy(claim, client)
@@ -436,16 +449,36 @@ func newDeploy(claim *k8ccv1alpha1.DistccClientClaim, client *k8ccv1alpha1.Distc
 					Kind:    "DistccClientClaim",
 				}),
 			},
-			Labels: client.Labels,
+			Labels: getLabelsForUser(client.Labels, claim.Spec.UserName),
 		},
 		Spec: appsv1beta2.DeploymentSpec{
 			Replicas: &replicas,
-			Selector: client.Spec.Selector,
+			Selector: getSelectorForUser(client.Spec.Selector, claim.Spec.UserName),
 			Template: client.Spec.Template,
 			Strategy: appsv1beta2.DeploymentStrategy{
 				Type: appsv1beta2.RollingUpdateDeploymentStrategyType,
 			},
 		},
+	}
+}
+
+func getLabelsForUser(labels map[string]string, user string) map[string]string {
+	// deep copy + update the user label
+	res := map[string]string{}
+	for k, v := range labels {
+		res[k] = v
+	}
+	res[UserLabel] = user
+	return res
+}
+
+func getSelectorForUser(selector *metav1.LabelSelector, user string) *metav1.LabelSelector {
+	if selector == nil || selector.MatchLabels == nil {
+		return nil
+	}
+	return &metav1.LabelSelector{
+		MatchLabels:      getLabelsForUser(selector.MatchLabels, user),
+		MatchExpressions: selector.MatchExpressions,
 	}
 }
 
