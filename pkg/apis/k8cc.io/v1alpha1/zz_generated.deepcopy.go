@@ -242,6 +242,15 @@ func (in *DistccClientClaimStatus) DeepCopyInto(out *DistccClientClaimStatus) {
 			(*in).DeepCopyInto(*out)
 		}
 	}
+	if in.Deployment != nil {
+		in, out := &in.Deployment, &out.Deployment
+		if *in == nil {
+			*out = nil
+		} else {
+			*out = new(v1.LocalObjectReference)
+			**out = **in
+		}
+	}
 	if in.Service != nil {
 		in, out := &in.Service, &out.Service
 		if *in == nil {

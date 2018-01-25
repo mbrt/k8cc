@@ -311,33 +311,50 @@ func (c *controller) syncHandler(key string) error {
 }
 
 func (c *controller) syncDeploy(claim *k8ccv1alpha1.DistccClientClaim, client *k8ccv1alpha1.DistccClient) (bool, error) {
-	userLabels := labels.Set(getLabelsForUser(client.Labels, claim.Spec.UserName))
-	deploys, err := c.deploymentsLister.Deployments(claim.Namespace).List(userLabels.AsSelector())
-	if err != nil && !kubeerr.IsNotFound(err) {
-		// An error occurred during Get, we'll requeue the item so we can
-		// attempt processing again later. This could have been caused by
-		// a temprary network failure, or any other transient reason.
-		return false, distcc.TransientError(err)
-	}
-	if len(deploys) > 1 {
-		// More than one deployment exists with the labels
-		msg := fmt.Sprintf(MessageAmbiguousLabels, len(deploys))
-		c.recorder.Event(claim, corev1.EventTypeWarning, ErrAmbiguousLabels, msg)
-		return true, distcc.TransientError(errors.Errorf(msg))
-	}
-	if len(deploys) == 1 {
-		// The deployment is here already, we're done
-		return false, nil
+	var deploy *appsv1beta2.Deployment
+	if claim.Status.Deployment != nil {
+		// The deployment should be already there
+		var err error
+		deploy, err = c.deploymentsLister.Deployments(claim.Namespace).Get(claim.Status.Deployment.Name)
+		if err != nil && !kubeerr.IsNotFound(err) {
+			// An error occurred during Get, we'll requeue the item so we can
+			// attempt processing again later. This could have been caused by
+			// a temprary network failure, or any other transient reason.
+			return false, distcc.TransientError(err)
+		}
 	}
 
-	new := newDeploy(claim, client)
-	deploy, err := c.kubeclientset.AppsV1beta2().Deployments(claim.Namespace).Create(new)
+	if deploy == nil {
+		// Try to adopt a deployment with matching labels
+		userLabels := labels.Set(getLabelsForUser(client.Labels, claim.Spec.UserName))
+		deploys, err := c.deploymentsLister.Deployments(claim.Namespace).List(userLabels.AsSelector())
+		if err != nil && !kubeerr.IsNotFound(err) {
+			// Ask a requeue
+			return false, distcc.TransientError(err)
+		}
+		if len(deploys) > 1 {
+			// More than one deployment exists with the labels
+			msg := fmt.Sprintf(MessageAmbiguousLabels, len(deploys))
+			c.recorder.Event(claim, corev1.EventTypeWarning, ErrAmbiguousLabels, msg)
+			return false, distcc.TransientError(errors.Errorf(msg))
+		}
+		if len(deploys) == 1 {
+			// Found a matching deployment
+			deploy = deploys[0]
+		}
+	}
 
-	// If an error occurs during Get/Create, we'll requeue the item so we can
-	// attempt processing again later. This could have been caused by a
-	// temporary network failure, or any other transient reason.
-	if err != nil {
-		return true, distcc.TransientError(err)
+	if deploy == nil {
+		// No way to get a deployment: need to create a new one
+		var err error
+		new := newDeploy(claim, client)
+		deploy, err = c.kubeclientset.AppsV1beta2().Deployments(claim.Namespace).Create(new)
+		// If an error occurs during Get/Create, we'll requeue the item so we can
+		// attempt processing again later. This could have been caused by a
+		// temporary network failure, or any other transient reason.
+		if err != nil {
+			return false, distcc.TransientError(err)
+		}
 	}
 
 	// If the Deployment is not controlled by this Distcc resource, we should log
@@ -345,10 +362,24 @@ func (c *controller) syncDeploy(claim *k8ccv1alpha1.DistccClientClaim, client *k
 	if !metav1.IsControlledBy(deploy, claim) {
 		msg := fmt.Sprintf(MessageResourceExists, deploy.Name)
 		c.recorder.Event(claim, corev1.EventTypeWarning, ErrResourceExists, msg)
-		return true, distcc.TransientError(errors.Errorf(msg))
+		return false, distcc.TransientError(errors.Errorf(msg))
 	}
 
-	return true, nil
+	// Try to update the state of the claim, with the link to the deployment, if it was not correct
+	updated := false
+	if deploy.Name != "" {
+		if claim.Status.Deployment == nil || claim.Status.Deployment.Name != deploy.Name {
+			claim.Status.Deployment = &corev1.LocalObjectReference{Name: deploy.Name}
+			updated = true
+		}
+	} else {
+		if claim.Status.Deployment != nil {
+			claim.Status.Deployment = nil
+			updated = true
+		}
+	}
+
+	return updated, nil
 }
 
 func (c *controller) syncService(claim *k8ccv1alpha1.DistccClientClaim, client *k8ccv1alpha1.DistccClient) (bool, error) {
