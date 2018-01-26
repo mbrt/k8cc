@@ -6,9 +6,9 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/mbrt/k8cc/pkg/controller"
+	"github.com/mbrt/k8cc/pkg/algo"
+	"github.com/mbrt/k8cc/pkg/controller/distcc"
 	"github.com/mbrt/k8cc/pkg/data"
-	"github.com/mbrt/k8cc/pkg/kube"
 )
 
 var (
@@ -22,7 +22,7 @@ type Service interface {
 }
 
 // NewService creates the API service
-func NewService(c controller.Controller, k kube.Operator) Service {
+func NewService(c algo.Controller, k distcc.Operator) Service {
 	return service{c, k}
 }
 
@@ -33,8 +33,8 @@ type Lease struct {
 }
 
 type service struct {
-	controller controller.Controller
-	operator   kube.Operator
+	controller algo.Controller
+	operator   distcc.Operator
 }
 
 func (s service) LeaseUser(ctx context.Context, u data.User, t data.Tag) (Lease, error) {

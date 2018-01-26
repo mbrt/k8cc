@@ -26,8 +26,8 @@ import (
 	clientset "github.com/mbrt/k8cc/pkg/client/clientset/versioned"
 	k8ccscheme "github.com/mbrt/k8cc/pkg/client/clientset/versioned/scheme"
 	listers "github.com/mbrt/k8cc/pkg/client/listers/k8cc/v1alpha1"
-	"github.com/mbrt/k8cc/pkg/distcc"
-	"github.com/mbrt/k8cc/pkg/kube"
+	sharedctr "github.com/mbrt/k8cc/pkg/controller"
+	k8ccerr "github.com/mbrt/k8cc/pkg/errors"
 )
 
 const controllerAgentName = "k8cc-distcc-client-controller"
@@ -50,6 +50,7 @@ const (
 	MessageResourceSynced = "DistccClientClaim synced successfully"
 	// MessageAmbiguousLabels is the message used for an Event fired when a Distcc
 	// already exists with the same labels
+
 	MessageAmbiguousLabels = "Multiple deployments (%d) satisfy the label selector. Only one should"
 
 	// UserLabel is the label used to identify a resource given to a particular user
@@ -63,7 +64,7 @@ type Controller interface {
 
 // NewController creates a new Controller
 func NewController(
-	sharedClient *kube.SharedClient,
+	sharedClient *sharedctr.SharedClient,
 	logger log.Logger,
 ) Controller {
 	deployInformer := sharedClient.KubeInformerFactory.Apps().V1beta2().Deployments()
@@ -279,7 +280,7 @@ func (c *controller) syncHandler(key string) error {
 		// processing again later. This could have been caused by a
 		// temporary network failure, or any other transient reason.
 		// Otherwise we just fail permanently
-		if distcc.IsTransient(err) {
+		if k8ccerr.IsTransient(err) {
 			return err
 		}
 		runtime.HandleError(err)
@@ -289,7 +290,7 @@ func (c *controller) syncHandler(key string) error {
 	// Check the related Service
 	changed.Service, err = c.syncService(claim, dclient)
 	if err != nil {
-		if distcc.IsTransient(err) {
+		if k8ccerr.IsTransient(err) {
 			return err
 		}
 		runtime.HandleError(err)
@@ -320,7 +321,7 @@ func (c *controller) syncDeploy(claim *k8ccv1alpha1.DistccClientClaim, client *k
 			// An error occurred during Get, we'll requeue the item so we can
 			// attempt processing again later. This could have been caused by
 			// a temprary network failure, or any other transient reason.
-			return false, distcc.TransientError(err)
+			return false, k8ccerr.TransientError(err)
 		}
 	}
 
@@ -330,13 +331,13 @@ func (c *controller) syncDeploy(claim *k8ccv1alpha1.DistccClientClaim, client *k
 		deploys, err := c.deploymentsLister.Deployments(claim.Namespace).List(userLabels.AsSelector())
 		if err != nil && !kubeerr.IsNotFound(err) {
 			// Ask a requeue
-			return false, distcc.TransientError(err)
+			return false, k8ccerr.TransientError(err)
 		}
 		if len(deploys) > 1 {
 			// More than one deployment exists with the labels
 			msg := fmt.Sprintf(MessageAmbiguousLabels, len(deploys))
 			c.recorder.Event(claim, corev1.EventTypeWarning, ErrAmbiguousLabels, msg)
-			return false, distcc.TransientError(errors.Errorf(msg))
+			return false, k8ccerr.TransientError(errors.Errorf(msg))
 		}
 		if len(deploys) == 1 {
 			// Found a matching deployment
@@ -353,7 +354,7 @@ func (c *controller) syncDeploy(claim *k8ccv1alpha1.DistccClientClaim, client *k
 		// attempt processing again later. This could have been caused by a
 		// temporary network failure, or any other transient reason.
 		if err != nil {
-			return false, distcc.TransientError(err)
+			return false, k8ccerr.TransientError(err)
 		}
 	}
 
@@ -362,7 +363,7 @@ func (c *controller) syncDeploy(claim *k8ccv1alpha1.DistccClientClaim, client *k
 	if !metav1.IsControlledBy(deploy, claim) {
 		msg := fmt.Sprintf(MessageResourceExists, deploy.Name)
 		c.recorder.Event(claim, corev1.EventTypeWarning, ErrResourceExists, msg)
-		return false, distcc.TransientError(errors.Errorf(msg))
+		return false, k8ccerr.TransientError(errors.Errorf(msg))
 	}
 
 	// Try to update the state of the claim, with the link to the deployment, if it was not correct

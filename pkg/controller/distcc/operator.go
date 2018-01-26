@@ -1,4 +1,4 @@
-package kube
+package distcc
 
 // see https://github.com/kubernetes/community/blob/8cafef897a22026d42f5e5bb3f104febe7e29830/contributors/devel/controllers.md
 // and https://github.com/kubernetes/sample-controller/blob/master/controller.go
@@ -30,8 +30,9 @@ import (
 	clientset "github.com/mbrt/k8cc/pkg/client/clientset/versioned"
 	k8ccscheme "github.com/mbrt/k8cc/pkg/client/clientset/versioned/scheme"
 	listers "github.com/mbrt/k8cc/pkg/client/listers/k8cc/v1alpha1"
+	"github.com/mbrt/k8cc/pkg/controller"
 	"github.com/mbrt/k8cc/pkg/data"
-	distccerr "github.com/mbrt/k8cc/pkg/distcc"
+	k8ccerr "github.com/mbrt/k8cc/pkg/errors"
 )
 
 const (
@@ -80,7 +81,7 @@ type operator struct {
 
 // NewOperator creates an Operator using the given shared client connection.
 func NewOperator(
-	sharedClient *SharedClient,
+	sharedClient *controller.SharedClient,
 	desiredState DesiredStateProvider,
 	logger log.Logger,
 ) Operator {
@@ -314,7 +315,7 @@ func (c *operator) syncHandler(key string) error {
 		// processing again later. This could have been caused by a
 		// temporary network failure, or any other transient reason.
 		// Otherwise we just fail permanently
-		if distccerr.IsTransient(err) {
+		if k8ccerr.IsTransient(err) {
 			return err
 		}
 		runtime.HandleError(err)
@@ -323,7 +324,7 @@ func (c *operator) syncHandler(key string) error {
 
 	update.ServiceCreated, err = c.syncService(distcc)
 	if err != nil {
-		if distccerr.IsTransient(err) {
+		if k8ccerr.IsTransient(err) {
 			return err
 		}
 		runtime.HandleError(err)
@@ -370,7 +371,7 @@ func (c *operator) syncStatefulSet(distcc *k8ccv1alpha1.Distcc) (distccUpdateSta
 	// attempt processing again later. This could have been caused by a
 	// temporary network failure, or any other transient reason.
 	if err != nil {
-		return state, distccerr.TransientError(err)
+		return state, k8ccerr.TransientError(err)
 	}
 
 	// If the StatefulSet is not controlled by this Distcc resource, we should log
@@ -378,7 +379,7 @@ func (c *operator) syncStatefulSet(distcc *k8ccv1alpha1.Distcc) (distccUpdateSta
 	if !metav1.IsControlledBy(stateful, distcc) {
 		msg := fmt.Sprintf(MessageResourceExists, stateful.Name)
 		c.recorder.Event(distcc, corev1.EventTypeWarning, ErrResourceExists, msg)
-		return state, distccerr.TransientError(errors.Errorf(msg))
+		return state, k8ccerr.TransientError(errors.Errorf(msg))
 	}
 
 	// Determine the desired replicas
@@ -392,7 +393,7 @@ func (c *operator) syncStatefulSet(distcc *k8ccv1alpha1.Distcc) (distccUpdateSta
 		// attempt processing again later. This could have been caused by a
 		// temporary network failure, or any other transient reason.
 		if err != nil {
-			return state, distccerr.TransientError(err)
+			return state, k8ccerr.TransientError(err)
 		}
 		state.StatefulScaled = true
 	}
@@ -426,7 +427,7 @@ func (c *operator) syncService(distcc *k8ccv1alpha1.Distcc) (bool, error) {
 	// attempt processing again later. This could have been caused by a
 	// temporary network failure, or any other transient reason.
 	if err != nil {
-		return updated, distccerr.TransientError(err)
+		return updated, k8ccerr.TransientError(err)
 	}
 
 	// If the Service is not controlled by this Distcc resource, we should log
@@ -434,7 +435,7 @@ func (c *operator) syncService(distcc *k8ccv1alpha1.Distcc) (bool, error) {
 	if !metav1.IsControlledBy(service, distcc) {
 		msg := fmt.Sprintf(MessageResourceExists, service.Name)
 		c.recorder.Event(distcc, corev1.EventTypeWarning, ErrResourceExists, msg)
-		return updated, distccerr.TransientError(errors.Errorf(msg))
+		return updated, k8ccerr.TransientError(errors.Errorf(msg))
 	}
 
 	return updated, nil

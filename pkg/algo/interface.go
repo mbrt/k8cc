@@ -1,6 +1,6 @@
-//go:generate mockgen -destination mock/controller_mock.go github.com/mbrt/k8cc/pkg/controller Controller,TagController,ScaleSettingsProvider
+//go:generate mockgen -destination mock/algo_mock.go github.com/mbrt/k8cc/pkg/algo Controller,TagController,ScaleSettingsProvider
 
-package controller
+package algo
 
 import (
 	"context"

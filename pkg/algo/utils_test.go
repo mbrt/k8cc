@@ -1,4 +1,4 @@
-package controller
+package algo
 
 type dummyLogger struct{}
 

@@ -1,4 +1,4 @@
-package kube
+package distcc
 
 import (
 	"github.com/pkg/errors"
@@ -7,6 +7,8 @@ import (
 	k8ccv1alpha1 "github.com/mbrt/k8cc/pkg/apis/k8cc.io/v1alpha1"
 	clientset "github.com/mbrt/k8cc/pkg/client/clientset/versioned"
 	"github.com/mbrt/k8cc/pkg/data"
+
+	"github.com/mbrt/k8cc/pkg/controller"
 )
 
 // StateLoader loads the user leases from all the Distcc objects
@@ -15,7 +17,7 @@ type StateLoader struct {
 }
 
 // NewStateLoader makes a new StateLoader starting from an already connected client
-func NewStateLoader(client *SharedClient) StateLoader {
+func NewStateLoader(client *controller.SharedClient) StateLoader {
 	return StateLoader{
 		k8ccclientset: client.K8ccClientset,
 	}

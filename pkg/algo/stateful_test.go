@@ -1,4 +1,4 @@
-package controller
+package algo
 
 import (
 	"context"
@@ -8,8 +8,8 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
+	distccmock "github.com/mbrt/k8cc/pkg/controller/distcc/mock"
 	"github.com/mbrt/k8cc/pkg/data"
-	kubemock "github.com/mbrt/k8cc/pkg/kube/mock"
 	"github.com/mbrt/k8cc/pkg/state"
 )
 
@@ -17,7 +17,7 @@ func TestStatefulSingleUser(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	operator := kubemock.NewMockOperator(ctrl)
+	operator := distccmock.NewMockOperator(ctrl)
 
 	logger := dummyLogger{}
 	ctx := context.Background()
@@ -107,7 +107,7 @@ func TestStatefulTwoUsers(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	operator := kubemock.NewMockOperator(ctrl)
+	operator := distccmock.NewMockOperator(ctrl)
 
 	logger := dummyLogger{}
 	ctx := context.Background()

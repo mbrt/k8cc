@@ -1,6 +1,6 @@
-//go:generate mockgen -destination mock/kube_mock.go github.com/mbrt/k8cc/pkg/kube Operator
+//go:generate mockgen -destination mock/distcc.go github.com/mbrt/k8cc/pkg/controller/distcc Operator
 
-package kube
+package distcc
 
 import (
 	"github.com/mbrt/k8cc/pkg/data"

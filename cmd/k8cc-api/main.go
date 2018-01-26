@@ -10,8 +10,9 @@ import (
 
 	"github.com/go-kit/kit/log"
 
+	"github.com/mbrt/k8cc/pkg/algo"
 	"github.com/mbrt/k8cc/pkg/controller"
-	"github.com/mbrt/k8cc/pkg/kube"
+	"github.com/mbrt/k8cc/pkg/controller/distcc"
 	"github.com/mbrt/k8cc/pkg/service"
 	"github.com/mbrt/k8cc/pkg/state"
 )
@@ -31,11 +32,11 @@ func main() {
 		logger = log.With(logger, "caller", log.DefaultCaller)
 	}
 
-	adapter := &controller.Adapter{}
+	adapter := &algo.Adapter{}
 	tagstate := state.NewInMemoryState()
-	contr := controller.NewStatefulController(adapter, tagstate, adapter, log.With(logger, "component", "controller"))
+	contr := algo.NewStatefulController(adapter, tagstate, adapter, log.With(logger, "component", "controller"))
 
-	sharedClient, err := kube.NewSharedClient(*kubeMasterURL, *kubeConfig)
+	sharedClient, err := controller.NewSharedClient(*kubeMasterURL, *kubeConfig)
 	if err != nil {
 		/* #nosec */
 		_ = logger.Log("err", err)
@@ -43,13 +44,13 @@ func main() {
 	}
 
 	// load the state before to start anything
-	if err = state.LoadFrom(tagstate, kube.NewStateLoader(sharedClient)); err != nil {
+	if err = state.LoadFrom(tagstate, distcc.NewStateLoader(sharedClient)); err != nil {
 		/* #nosec */
 		_ = logger.Log("err", err)
 		os.Exit(1)
 	}
 
-	operator := kube.NewOperator(sharedClient, adapter, log.With(logger, "component", "operator"))
+	operator := distcc.NewOperator(sharedClient, adapter, log.With(logger, "component", "operator"))
 
 	// set now the objects for the adapter
 	adapter.Controller = contr

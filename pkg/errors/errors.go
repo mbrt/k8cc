@@ -1,10 +1,10 @@
-package distcc
+package errors
 
-import "github.com/pkg/errors"
+import stderrs "github.com/pkg/errors"
 
 // IsTransient returns true if an error is transient
 func IsTransient(err error) bool {
-	te, ok := errors.Cause(err).(transient)
+	te, ok := stderrs.Cause(err).(transient)
 	return ok && te.Transient()
 }
 
