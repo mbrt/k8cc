@@ -31,6 +31,7 @@ import (
 	k8ccscheme "github.com/mbrt/k8cc/pkg/client/clientset/versioned/scheme"
 	listers "github.com/mbrt/k8cc/pkg/client/listers/k8cc/v1alpha1"
 	"github.com/mbrt/k8cc/pkg/controller"
+	"github.com/mbrt/k8cc/pkg/conv"
 	"github.com/mbrt/k8cc/pkg/data"
 	k8ccerr "github.com/mbrt/k8cc/pkg/errors"
 )
@@ -455,7 +456,7 @@ func (c *operator) updateDistccStatus(distcc *k8ccv1alpha1.Distcc, updated distc
 		}
 		leasesState[i] = k8ccv1alpha1.DistccLease{
 			UserName:         string(lease.User),
-			ExpirationTime:   *toKubeTime(lease.Expiration),
+			ExpirationTime:   *conv.ToKubeTime(lease.Expiration),
 			AssignedOrdinals: hosts,
 		}
 	}
@@ -467,7 +468,7 @@ func (c *operator) updateDistccStatus(distcc *k8ccv1alpha1.Distcc, updated distc
 	// You can use DeepCopy() to make a deep copy of original object and modify this copy
 	// Or create a copy manually for better performance
 	distccCopy := distcc.DeepCopy()
-	now := toKubeTime(time.Now())
+	now := conv.ToKubeTime(time.Now())
 	distccCopy.Status.LastUpdateTime = now
 	if updated.StatefulScaled {
 		distccCopy.Status.LastScaleTime = now
@@ -611,12 +612,6 @@ func needScale(distcc *k8ccv1alpha1.Distcc, stateful *appsv1beta2.StatefulSet, d
 	}
 	nextAllowedTime := distcc.Status.LastScaleTime.Add(distcc.Spec.DownscaleWindow.Duration)
 	return time.Now().After(nextAllowedTime)
-}
-
-func toKubeTime(t time.Time) *metav1.Time {
-	// It's necessary to truncate nanoseconds to allow correct comparison
-	r := metav1.NewTime(t).Rfc3339Copy()
-	return &r
 }
 
 func isStateEqual(a, b []k8ccv1alpha1.DistccLease) bool {

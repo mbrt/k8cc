@@ -27,6 +27,7 @@ import (
 	k8ccscheme "github.com/mbrt/k8cc/pkg/client/clientset/versioned/scheme"
 	listers "github.com/mbrt/k8cc/pkg/client/listers/k8cc/v1alpha1"
 	sharedctr "github.com/mbrt/k8cc/pkg/controller"
+	"github.com/mbrt/k8cc/pkg/conv"
 	k8ccerr "github.com/mbrt/k8cc/pkg/errors"
 )
 
@@ -50,7 +51,6 @@ const (
 	MessageResourceSynced = "DistccClientClaim synced successfully"
 	// MessageAmbiguousLabels is the message used for an Event fired when a Distcc
 	// already exists with the same labels
-
 	MessageAmbiguousLabels = "Multiple deployments (%d) satisfy the label selector. Only one should"
 
 	// UserLabel is the label used to identify a resource given to a particular user
@@ -312,40 +312,26 @@ func (c *controller) syncHandler(key string) error {
 }
 
 func (c *controller) syncDeploy(claim *k8ccv1alpha1.DistccClientClaim, client *k8ccv1alpha1.DistccClient) (bool, error) {
-	var deploy *appsv1beta2.Deployment
-	if claim.Status.Deployment != nil {
-		// The deployment should be already there
-		var err error
-		deploy, err = c.deploymentsLister.Deployments(claim.Namespace).Get(claim.Status.Deployment.Name)
-		if err != nil && !kubeerr.IsNotFound(err) {
-			// An error occurred during Get, we'll requeue the item so we can
-			// attempt processing again later. This could have been caused by
-			// a temprary network failure, or any other transient reason.
-			return false, k8ccerr.TransientError(err)
-		}
-	}
-
-	if deploy == nil {
-		// Try to adopt a deployment with matching labels
-		userLabels := labels.Set(getLabelsForUser(client.Labels, claim.Spec.UserName))
-		deploys, err := c.deploymentsLister.Deployments(claim.Namespace).List(userLabels.AsSelector())
-		if err != nil && !kubeerr.IsNotFound(err) {
-			// Ask a requeue
-			return false, k8ccerr.TransientError(err)
-		}
-		if len(deploys) > 1 {
-			// More than one deployment exists with the labels
-			msg := fmt.Sprintf(MessageAmbiguousLabels, len(deploys))
+	// Try to retreive the existing deployment through the status reference, or the labels selector
+	obj, err := sharedctr.GetObjectFromReferenceOrSelector(
+		sharedctr.NewDeploymentLister(c.deploymentsLister),
+		claim.Namespace, claim.Status.Deployment,
+		labels.Set(getLabelsForUser(client.Labels, claim.Spec.UserName)).AsSelector(),
+	)
+	if err != nil {
+		if sharedctr.IsAmbiguousReference(err) {
+			// TODO msg := fmt.Sprintf(MessageAmbiguousLabels, len(deploys))
+			msg := err.Error()
 			c.recorder.Event(claim, corev1.EventTypeWarning, ErrAmbiguousLabels, msg)
 			return false, k8ccerr.TransientError(errors.Errorf(msg))
 		}
-		if len(deploys) == 1 {
-			// Found a matching deployment
-			deploy = deploys[0]
-		}
+		return false, err
 	}
 
-	if deploy == nil {
+	var deploy *appsv1beta2.Deployment
+	if obj != nil {
+		deploy = obj.(*appsv1beta2.Deployment)
+	} else {
 		// No way to get a deployment: need to create a new one
 		var err error
 		new := newDeploy(claim, client)
@@ -451,14 +437,14 @@ func (c *controller) updateExpiration(claim *k8ccv1alpha1.DistccClientClaim, cli
 	now := time.Now()
 	// If expiration is not set, set it automatically
 	if claim.Status.ExpirationTime == nil {
-		claim.Status.ExpirationTime = toKubeTime(now)
+		claim.Status.ExpirationTime = conv.ToKubeTime(now)
 		return true
 	}
 	// If the expiration exceedes the maximum possible one (namely now + expiration time)
 	// then reduce it to that value
 	maxExpiration := now.Add(client.Spec.LeaseDuration.Duration)
 	if claim.Status.ExpirationTime.After(maxExpiration) {
-		claim.Status.ExpirationTime = toKubeTime(maxExpiration)
+		claim.Status.ExpirationTime = conv.ToKubeTime(maxExpiration)
 		return true
 	}
 	return false
@@ -512,12 +498,6 @@ func getSelectorForUser(selector *metav1.LabelSelector, user string) *metav1.Lab
 		MatchLabels:      getLabelsForUser(selector.MatchLabels, user),
 		MatchExpressions: selector.MatchExpressions,
 	}
-}
-
-func toKubeTime(t time.Time) *metav1.Time {
-	// It's necessary to truncate nanoseconds to allow correct comparison
-	r := metav1.NewTime(t).Rfc3339Copy()
-	return &r
 }
 
 type componentsChange struct {
