@@ -122,9 +122,15 @@ type DistccClientClaim struct {
 
 // DistccClientClaimSpec contains info about a user lease
 type DistccClientClaimSpec struct {
-	DistccClientName string               `json:"distccClientName"`
-	UserName         string               `json:"userName"`
-	Secrets          []v1.ObjectReference `json:"secrets"`
+	DistccClientName string   `json:"distccClientName"`
+	UserName         string   `json:"userName"`
+	Secrets          []Secret `json:"secrets"`
+}
+
+// Secret contains the name and the reference to a secret in the namespace
+type Secret struct {
+	Name         string                `json:"name"`
+	VolumeSource v1.SecretVolumeSource `json:"volumeSource"`
 }
 
 // DistccClientClaimStatus is the status for a DistccClientClaim resource

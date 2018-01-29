@@ -1,12 +1,15 @@
 package controller
 
 import (
+	"fmt"
+
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	kubeerr "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	appslisters "k8s.io/client-go/listers/apps/v1beta2"
+	corelisters "k8s.io/client-go/listers/core/v1"
 
 	k8ccerr "github.com/mbrt/k8cc/pkg/errors"
 )
@@ -22,6 +25,11 @@ type Lister interface {
 // NewDeploymentLister returns a lister for deployments
 func NewDeploymentLister(ls appslisters.DeploymentLister) Lister {
 	return deploymentLister{lister: ls}
+}
+
+// NewServiceLister returns a lister for deployments
+func NewServiceLister(ls corelisters.ServiceLister) Lister {
+	return serviceLister{lister: ls}
 }
 
 // GetObjectFromReferenceOrSelector returns an object referenced by the given reference, or by the selector.
@@ -69,7 +77,7 @@ func GetObjectFromLabels(lister Lister, namespace string, selector labels.Select
 		return nil, nil
 	}
 	if len(objs) > 1 {
-		return nil, AmbiguousReferenceError(errors.New("error: more than one object satisfies the given labels"))
+		return nil, AmbiguousReferenceError(fmt.Errorf("multiple objects (%d) satisfy the label selector, expected only one", len(objs)))
 	}
 	return objs[0], nil
 }
@@ -106,6 +114,23 @@ func (d deploymentLister) ListByName(namespace, name string) (runtime.Object, er
 
 func (d deploymentLister) ListBySelector(namespace string, selector labels.Selector) ([]runtime.Object, error) {
 	ds, err := d.lister.Deployments(namespace).List(selector)
+	res := make([]runtime.Object, len(ds))
+	for i, d := range ds {
+		res[i] = d
+	}
+	return res, err
+}
+
+type serviceLister struct {
+	lister corelisters.ServiceLister
+}
+
+func (s serviceLister) ListByName(namespace, name string) (runtime.Object, error) {
+	return s.lister.Services(namespace).Get(name)
+}
+
+func (d serviceLister) ListBySelector(namespace string, selector labels.Selector) ([]runtime.Object, error) {
+	ds, err := d.lister.Services(namespace).List(selector)
 	res := make([]runtime.Object, len(ds))
 	for i, d := range ds {
 		res[i] = d

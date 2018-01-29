@@ -18,6 +18,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	appslisters "k8s.io/client-go/listers/apps/v1beta2"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
@@ -49,12 +50,12 @@ const (
 	// MessageResourceSynced is the message used for an Event fired when a Distcc
 	// is synced successfully
 	MessageResourceSynced = "DistccClientClaim synced successfully"
-	// MessageAmbiguousLabels is the message used for an Event fired when a Distcc
-	// already exists with the same labels
-	MessageAmbiguousLabels = "Multiple deployments (%d) satisfy the label selector. Only one should"
 
 	// UserLabel is the label used to identify a resource given to a particular user
 	UserLabel = "k8cc.io/username"
+
+	// SSHPort is the port used by the ssh daemon
+	SSHPort = 22
 )
 
 // Controller is responsible for DistccClient and DistccClientClaim objects management
@@ -68,6 +69,7 @@ func NewController(
 	logger log.Logger,
 ) Controller {
 	deployInformer := sharedClient.KubeInformerFactory.Apps().V1beta2().Deployments()
+	serviceInformer := sharedClient.KubeInformerFactory.Core().V1().Services()
 	distccInformer := sharedClient.DistccInformerFactory.K8cc().V1alpha1().DistccClients()
 
 	// Create event broadcaster
@@ -87,6 +89,8 @@ func NewController(
 		distccsSynced:     distccInformer.Informer().HasSynced,
 		deploymentsLister: deployInformer.Lister(),
 		deploymentsSynced: deployInformer.Informer().HasSynced,
+		servicesLister:    serviceInformer.Lister(),
+		servicesSynced:    serviceInformer.Informer().HasSynced,
 		logger:            logger,
 		workqueue:         workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "k8cc-distcc-client"),
 		recorder:          recorder,
@@ -126,6 +130,8 @@ type controller struct {
 	k8ccclientset      clientset.Interface
 	deploymentsLister  appslisters.DeploymentLister
 	deploymentsSynced  cache.InformerSynced
+	servicesLister     corelisters.ServiceLister
+	servicesSynced     cache.InformerSynced
 	distccsLister      listers.DistccClientLister
 	distccsSynced      cache.InformerSynced
 	distccclaimsLister listers.DistccClientClaimLister
@@ -147,7 +153,7 @@ func (c *controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	defer runtime.HandleCrash()
 	defer c.workqueue.ShutDown()
 
-	if ok := cache.WaitForCacheSync(stopCh, c.deploymentsSynced, c.distccsSynced, c.distccclaimsSynced); !ok {
+	if ok := cache.WaitForCacheSync(stopCh, c.deploymentsSynced, c.servicesSynced, c.distccsSynced, c.distccclaimsSynced); !ok {
 		return errors.New("failed to wait for caches to sync")
 	}
 
@@ -297,13 +303,6 @@ func (c *controller) syncHandler(key string) error {
 		return nil
 	}
 
-	// Finally, we update the status block of the resource to reflect the
-	// current state of the world
-	err = c.updateClaimStatus(claim, changed)
-	if err != nil {
-		return err
-	}
-
 	if changed.Any() {
 		_, err = c.k8ccclientset.K8ccV1alpha1().DistccClientClaims(namespace).Update(claim)
 	}
@@ -320,8 +319,7 @@ func (c *controller) syncDeploy(claim *k8ccv1alpha1.DistccClientClaim, client *k
 	)
 	if err != nil {
 		if sharedctr.IsAmbiguousReference(err) {
-			// TODO msg := fmt.Sprintf(MessageAmbiguousLabels, len(deploys))
-			msg := err.Error()
+			msg := fmt.Sprintf("Deployment ref resolution failed: %s", err.Error())
 			c.recorder.Event(claim, corev1.EventTypeWarning, ErrAmbiguousLabels, msg)
 			return false, k8ccerr.TransientError(errors.Errorf(msg))
 		}
@@ -370,13 +368,60 @@ func (c *controller) syncDeploy(claim *k8ccv1alpha1.DistccClientClaim, client *k
 }
 
 func (c *controller) syncService(claim *k8ccv1alpha1.DistccClientClaim, client *k8ccv1alpha1.DistccClient) (bool, error) {
-	// TODO
-	return false, nil
-}
+	// Try to retreive the existing deployment through the status reference, or the labels selector
+	obj, err := sharedctr.GetObjectFromReferenceOrSelector(
+		sharedctr.NewServiceLister(c.servicesLister),
+		claim.Namespace, claim.Status.Service,
+		labels.Set(getLabelsForUser(client.Labels, claim.Spec.UserName)).AsSelector(),
+	)
+	if err != nil {
+		if sharedctr.IsAmbiguousReference(err) {
+			msg := fmt.Sprintf("Service ref resolution failed: %s", err.Error())
+			c.recorder.Event(claim, corev1.EventTypeWarning, ErrAmbiguousLabels, msg)
+			return false, k8ccerr.TransientError(errors.Errorf(msg))
+		}
+		return false, err
+	}
 
-func (c *controller) updateClaimStatus(claim *k8ccv1alpha1.DistccClientClaim, update componentsChange) error {
-	// TODO
-	return nil
+	var service *corev1.Service
+	if obj != nil {
+		service = obj.(*corev1.Service)
+	} else {
+		// No way to get a service: need to create a new one
+		var err error
+		new := newService(claim, client)
+		service, err = c.kubeclientset.CoreV1().Services(claim.Namespace).Create(new)
+		// If an error occurs during Get/Create, we'll requeue the item so we can
+		// attempt processing again later. This could have been caused by a
+		// temporary network failure, or any other transient reason.
+		if err != nil {
+			return false, k8ccerr.TransientError(err)
+		}
+	}
+
+	// If the Service is not controlled by this Distcc resource, we should log
+	// a warning to the event recorder and ret
+	if !metav1.IsControlledBy(service, claim) {
+		msg := fmt.Sprintf(MessageResourceExists, service.Name)
+		c.recorder.Event(claim, corev1.EventTypeWarning, ErrResourceExists, msg)
+		return false, k8ccerr.TransientError(errors.Errorf(msg))
+	}
+
+	// Try to update the state of the claim, with the link to the deployment, if it was not correct
+	updated := false
+	if service.Name != "" {
+		if claim.Status.Service == nil || claim.Status.Service.Name != service.Name {
+			claim.Status.Service = &corev1.LocalObjectReference{Name: service.Name}
+			updated = true
+		}
+	} else {
+		if claim.Status.Service != nil {
+			claim.Status.Service = nil
+			updated = true
+		}
+	}
+
+	return updated, nil
 }
 
 // enqueueDistccClient takes a DistccClient resource and converts it into a
@@ -455,7 +500,20 @@ func (c *controller) isExpired(claim *k8ccv1alpha1.DistccClientClaim, client *k8
 }
 
 func newDeploy(claim *k8ccv1alpha1.DistccClientClaim, client *k8ccv1alpha1.DistccClient) *appsv1beta2.Deployment {
-	var replicas int32 = 1 // always one POD per client
+	// always one POD per client
+	var replicas int32 = 1
+	// update the template with the required secrets if needed
+	template := client.Spec.Template.DeepCopy()
+	for _, secret := range claim.Spec.Secrets {
+		volume := corev1.Volume{
+			Name: secret.Name,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &secret.VolumeSource,
+			},
+		}
+		template.Spec.Volumes = append(template.Spec.Volumes, volume)
+	}
+
 	return &appsv1beta2.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: fmt.Sprintf("%s-", claim.Name),
@@ -472,10 +530,35 @@ func newDeploy(claim *k8ccv1alpha1.DistccClientClaim, client *k8ccv1alpha1.Distc
 		Spec: appsv1beta2.DeploymentSpec{
 			Replicas: &replicas,
 			Selector: getSelectorForUser(client.Spec.Selector, claim.Spec.UserName),
-			Template: client.Spec.Template,
+			Template: *template,
 			Strategy: appsv1beta2.DeploymentStrategy{
 				Type: appsv1beta2.RollingUpdateDeploymentStrategyType,
 			},
+		},
+	}
+}
+
+func newService(claim *k8ccv1alpha1.DistccClientClaim, client *k8ccv1alpha1.DistccClient) *corev1.Service {
+	selector := getLabelsForUser(client.Labels, claim.Spec.UserName)
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: fmt.Sprintf("%s-", claim.Name),
+			Namespace:    claim.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(claim, schema.GroupVersionKind{
+					Group:   k8ccv1alpha1.SchemeGroupVersion.Group,
+					Version: k8ccv1alpha1.SchemeGroupVersion.Version,
+					Kind:    "DistccClientClaim",
+				}),
+			},
+			Labels: selector,
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{Port: SSHPort},
+			},
+			Selector: selector,
+			Type:     corev1.ServiceTypeNodePort,
 		},
 	}
 }
