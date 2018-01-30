@@ -12,6 +12,7 @@ import (
 
 	"github.com/mbrt/k8cc/pkg/algo"
 	"github.com/mbrt/k8cc/pkg/controller"
+	clientctrl "github.com/mbrt/k8cc/pkg/controller/client"
 	"github.com/mbrt/k8cc/pkg/controller/distcc"
 	"github.com/mbrt/k8cc/pkg/service"
 	"github.com/mbrt/k8cc/pkg/state"
@@ -49,6 +50,8 @@ func main() {
 		_ = logger.Log("err", err)
 		os.Exit(1)
 	}
+
+	clientController := clientctrl.NewController(sharedClient, log.With(logger, "component", "client-controller"))
 
 	operator := distcc.NewOperator(sharedClient, adapter, log.With(logger, "component", "operator"))
 
@@ -89,6 +92,10 @@ func main() {
 		/* #nosec */
 		_ = logger.Log("transport", "HTTP", "addr", *httpAddr)
 		errs <- http.ListenAndServe(*httpAddr, h)
+	}()
+
+	go func() {
+		errs <- clientController.Run(2, stopCh)
 	}()
 
 	// this last one takes ownership of the main goroutine

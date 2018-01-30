@@ -71,6 +71,7 @@ func NewController(
 	deployInformer := sharedClient.KubeInformerFactory.Apps().V1beta2().Deployments()
 	serviceInformer := sharedClient.KubeInformerFactory.Core().V1().Services()
 	distccInformer := sharedClient.DistccInformerFactory.K8cc().V1alpha1().DistccClients()
+	claimInformer := sharedClient.DistccInformerFactory.K8cc().V1alpha1().DistccClientClaims()
 
 	// Create event broadcaster
 	// Add distcc types to the default Kubernetes Scheme so Events can be
@@ -85,26 +86,43 @@ func NewController(
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	op := controller{
-		distccsLister:     distccInformer.Lister(),
-		distccsSynced:     distccInformer.Informer().HasSynced,
-		deploymentsLister: deployInformer.Lister(),
-		deploymentsSynced: deployInformer.Informer().HasSynced,
-		servicesLister:    serviceInformer.Lister(),
-		servicesSynced:    serviceInformer.Informer().HasSynced,
-		logger:            logger,
-		workqueue:         workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "k8cc-distcc-client"),
-		recorder:          recorder,
+		deploymentsLister:  deployInformer.Lister(),
+		deploymentsSynced:  deployInformer.Informer().HasSynced,
+		servicesLister:     serviceInformer.Lister(),
+		servicesSynced:     serviceInformer.Informer().HasSynced,
+		distccsLister:      distccInformer.Lister(),
+		distccsSynced:      distccInformer.Informer().HasSynced,
+		distccclaimsLister: claimInformer.Lister(),
+		distccclaimsSynced: claimInformer.Informer().HasSynced,
+		logger:             logger,
+		workqueue:          workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "k8cc-distcc-client"),
+		recorder:           recorder,
 	}
 
-	// Set up an event handler for when Distcc resources change
-	distccInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: op.enqueueDistccClient,
+	// Set up an event handler for when Claim resources change
+	claimInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: op.enqueueClientClaim,
 		UpdateFunc: func(old, new interface{}) {
 			// we ignore if old == new. we take advantage of periodic
 			// updates to manage downscaling periodically
-			op.enqueueDistccClient(new)
+			op.enqueueClientClaim(new)
 		},
-		DeleteFunc: op.enqueueDistccClient,
+		DeleteFunc: op.enqueueClientClaim,
+	})
+
+	distccInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: op.handleObject,
+		UpdateFunc: func(old, new interface{}) {
+			newClient := new.(*k8ccv1alpha1.DistccClient)
+			oldClient := old.(*k8ccv1alpha1.DistccClient)
+			if newClient.ResourceVersion == oldClient.ResourceVersion {
+				// Periodic resync will send update events for all known DistccClients.
+				// Two different versions of the same resource will always have different RVs.
+				return
+			}
+			op.handleObject(new)
+		},
+		DeleteFunc: op.handleObject,
 	})
 
 	deployInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -114,6 +132,21 @@ func NewController(
 			oldDeploy := old.(*appsv1beta2.Deployment)
 			if newDeploy.ResourceVersion == oldDeploy.ResourceVersion {
 				// Periodic resync will send update events for all known Deployments.
+				// Two different versions of the same resource will always have different RVs.
+				return
+			}
+			op.handleObject(new)
+		},
+		DeleteFunc: op.handleObject,
+	})
+
+	serviceInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: op.handleObject,
+		UpdateFunc: func(old, new interface{}) {
+			newService := new.(*corev1.Service)
+			oldService := old.(*corev1.Service)
+			if newService.ResourceVersion == oldService.ResourceVersion {
+				// Periodic resync will send update events for all known Services.
 				// Two different versions of the same resource will always have different RVs.
 				return
 			}
@@ -274,7 +307,7 @@ func (c *controller) syncHandler(key string) error {
 	changed := componentsChange{}
 	changed.Expiration = c.updateExpiration(claim, dclient)
 
-	// Check expiration time, and delete
+	// Check expiration time, and in case delete the resource
 	if c.isExpired(claim, dclient) {
 		return c.k8ccclientset.K8ccV1alpha1().DistccClientClaims(namespace).Delete(name, nil)
 	}
@@ -424,10 +457,10 @@ func (c *controller) syncService(claim *k8ccv1alpha1.DistccClientClaim, client *
 	return updated, nil
 }
 
-// enqueueDistccClient takes a DistccClient resource and converts it into a
+// enqueueClientClaim takes a DistccClientClaim resource and converts it into a
 // namespace/name string which is then put onto the work queue. This method
 // should *not* be passed resources of any type other than DistccClient.
-func (c *controller) enqueueDistccClient(obj interface{}) {
+func (c *controller) enqueueClientClaim(obj interface{}) {
 	var key string
 	var err error
 	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
@@ -473,7 +506,7 @@ func (c *controller) handleObject(obj interface{}) {
 			return
 		}
 
-		c.enqueueDistccClient(distcc)
+		c.enqueueClientClaim(distcc)
 		return
 	}
 }
