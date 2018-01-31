@@ -1,0 +1,21 @@
+apiVersion: k8cc.io/v1alpha1
+kind: DistccClient
+metadata:
+  name: master
+  labels:
+    build-tag: master
+spec:
+  leaseDuration: 1m
+  selector:
+    matchLabels:
+      build-tag: master
+  template:
+    metadata:
+      labels:
+        build-tag: master
+    spec:
+      containers:
+      - name: distcc
+        image: mbrt/distcc-client-ubuntu:latest
+        ports:
+        - containerPort: 22

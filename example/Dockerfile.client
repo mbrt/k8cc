@@ -1,0 +1,9 @@
+FROM mbrt/distcc-ubuntu:latest
+
+RUN apt update                    && \
+    apt install -y openssh-server && \
+    apt clean                     && \
+    rm -rf /var/cache/apt
+
+ENTRYPOINT ["/tini", "--"]
+CMD ["/usr/bin/sshd", "-D"]

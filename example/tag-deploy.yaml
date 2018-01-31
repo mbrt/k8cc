@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
       - name: distcc
-        image: mbrt/distcc-ubuntu
+        image: mbrt/distcc-ubuntu:latest
         args:
           - "distccd"
           - "--allow"

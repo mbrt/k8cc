@@ -86,6 +86,8 @@ func NewController(
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	op := controller{
+		kubeclientset:      sharedClient.KubeClientset,
+		k8ccclientset:      sharedClient.K8ccClientset,
 		deploymentsLister:  deployInformer.Lister(),
 		deploymentsSynced:  deployInformer.Informer().HasSynced,
 		servicesLister:     serviceInformer.Lister(),
@@ -110,6 +112,7 @@ func NewController(
 		DeleteFunc: op.enqueueClientClaim,
 	})
 
+	// TODO: handle client by enqueuing all the referencing claims
 	distccInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: op.handleObject,
 		UpdateFunc: func(old, new interface{}) {
@@ -495,7 +498,7 @@ func (c *controller) handleObject(obj interface{}) {
 	if ownerRef := metav1.GetControllerOf(object); ownerRef != nil {
 		// If this object is not owned by a Distcc, we should not do anything more
 		// with it.
-		if ownerRef.Kind != "DistccClient" {
+		if ownerRef.Kind != "DistccClientClaim" {
 			return
 		}
 
@@ -535,7 +538,10 @@ func (c *controller) isExpired(claim *k8ccv1alpha1.DistccClientClaim, client *k8
 func newDeploy(claim *k8ccv1alpha1.DistccClientClaim, client *k8ccv1alpha1.DistccClient) *appsv1beta2.Deployment {
 	// always one POD per client
 	var replicas int32 = 1
-	// update the template with the required secrets if needed
+	labels := getLabelsForUser(client.Labels, claim.Spec.UserName)
+	// update the template with
+	// - the required secrets
+	// - the labels coming from the claim
 	template := client.Spec.Template.DeepCopy()
 	for _, secret := range claim.Spec.Secrets {
 		volume := corev1.Volume{
@@ -546,6 +552,7 @@ func newDeploy(claim *k8ccv1alpha1.DistccClientClaim, client *k8ccv1alpha1.Distc
 		}
 		template.Spec.Volumes = append(template.Spec.Volumes, volume)
 	}
+	template.Labels = labels
 
 	return &appsv1beta2.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -558,7 +565,7 @@ func newDeploy(claim *k8ccv1alpha1.DistccClientClaim, client *k8ccv1alpha1.Distc
 					Kind:    "DistccClientClaim",
 				}),
 			},
-			Labels: getLabelsForUser(client.Labels, claim.Spec.UserName),
+			Labels: labels,
 		},
 		Spec: appsv1beta2.DeploymentSpec{
 			Replicas: &replicas,

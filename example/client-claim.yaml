@@ -1,0 +1,9 @@
+apiVersion: k8cc.io/v1alpha1
+kind: DistccClientClaim
+metadata:
+  name: mike-master
+  labels:
+    build-tag: master
+spec:
+  distccClientName: master
+  userName: mike

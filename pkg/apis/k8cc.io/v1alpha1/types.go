@@ -89,10 +89,9 @@ type DistccClient struct {
 
 // DistccClientSpec is the spec for a DistccClient resource
 type DistccClientSpec struct {
-	DeploymentName string                `json:"deploymentName"`
-	LeaseDuration  metav1.Duration       `json:"leaseDuration"`
-	Selector       *metav1.LabelSelector `json:"selector,omitempty"`
-	Template       v1.PodTemplateSpec    `json:"template"`
+	LeaseDuration metav1.Duration       `json:"leaseDuration"`
+	Selector      *metav1.LabelSelector `json:"selector,omitempty"`
+	Template      v1.PodTemplateSpec    `json:"template"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
