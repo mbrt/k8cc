@@ -308,7 +308,10 @@ func (c *controller) syncHandler(key string) error {
 
 	// If the expiration time is not set, set it automatically
 	changed := componentsChange{}
-	changed.Expiration = c.updateExpiration(claim, dclient)
+	if changed.Expiration = c.updateExpiration(claim, dclient); changed.Expiration {
+		_ = c.logger.Log("method", "syncHandler", "info",
+			fmt.Sprintf("updated expiration to %s", claim.Status.ExpirationTime))
+	}
 
 	// Check expiration time, and in case delete the resource
 	if c.isExpired(claim, dclient) {
@@ -502,29 +505,25 @@ func (c *controller) handleObject(obj interface{}) {
 			return
 		}
 
-		distcc, err := c.distccsLister.DistccClients(object.GetNamespace()).Get(ownerRef.Name)
+		dclaim, err := c.distccclaimsLister.DistccClientClaims(object.GetNamespace()).Get(ownerRef.Name)
 		if err != nil {
 			_ = c.logger.Log("method", "handleObject", "err", err.Error(), "info",
 				fmt.Sprintf("ignore orphaned %s with owner %s", object.GetSelfLink(), ownerRef.Name))
 			return
 		}
 
-		c.enqueueClientClaim(distcc)
+		c.enqueueClientClaim(dclaim)
 		return
 	}
 }
 
 func (c *controller) updateExpiration(claim *k8ccv1alpha1.DistccClientClaim, client *k8ccv1alpha1.DistccClient) bool {
 	now := time.Now()
+	maxExpiration := now.Add(client.Spec.LeaseDuration.Duration)
 	// If expiration is not set, set it automatically
-	if claim.Status.ExpirationTime == nil {
-		claim.Status.ExpirationTime = conv.ToKubeTime(now)
-		return true
-	}
 	// If the expiration exceedes the maximum possible one (namely now + expiration time)
 	// then reduce it to that value
-	maxExpiration := now.Add(client.Spec.LeaseDuration.Duration)
-	if claim.Status.ExpirationTime.After(maxExpiration) {
+	if claim.Status.ExpirationTime == nil || claim.Status.ExpirationTime.After(maxExpiration) {
 		claim.Status.ExpirationTime = conv.ToKubeTime(maxExpiration)
 		return true
 	}
@@ -532,7 +531,7 @@ func (c *controller) updateExpiration(claim *k8ccv1alpha1.DistccClientClaim, cli
 }
 
 func (c *controller) isExpired(claim *k8ccv1alpha1.DistccClientClaim, client *k8ccv1alpha1.DistccClient) bool {
-	return claim.Status.ExpirationTime.After(time.Now())
+	return time.Now().After(claim.Status.ExpirationTime.Time)
 }
 
 func newDeploy(claim *k8ccv1alpha1.DistccClientClaim, client *k8ccv1alpha1.DistccClient) *appsv1beta2.Deployment {
