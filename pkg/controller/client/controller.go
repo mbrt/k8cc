@@ -112,9 +112,8 @@ func NewController(
 		DeleteFunc: op.enqueueClientClaim,
 	})
 
-	// TODO: handle client by enqueuing all the referencing claims
 	distccInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: op.handleObject,
+		AddFunc: op.handleDistccClient,
 		UpdateFunc: func(old, new interface{}) {
 			newClient := new.(*k8ccv1alpha1.DistccClient)
 			oldClient := old.(*k8ccv1alpha1.DistccClient)
@@ -123,9 +122,9 @@ func NewController(
 				// Two different versions of the same resource will always have different RVs.
 				return
 			}
-			op.handleObject(new)
+			op.handleDistccClient(new)
 		},
-		DeleteFunc: op.handleObject,
+		DeleteFunc: op.handleDistccClient,
 	})
 
 	deployInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -482,20 +481,10 @@ func (c *controller) enqueueClientClaim(obj interface{}) {
 // It then enqueues that DistccClient resource to be processed. If the object
 // does not have an appropriate OwnerReference, it will simply be skipped.
 func (c *controller) handleObject(obj interface{}) {
-	var object metav1.Object
-	var ok bool
-	if object, ok = obj.(metav1.Object); !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			runtime.HandleError(errors.Errorf("error decoding object, invalid type"))
-			return
-		}
-		object, ok = tombstone.Obj.(metav1.Object)
-		if !ok {
-			runtime.HandleError(errors.Errorf("error decoding object tombstone, invalid type"))
-			return
-		}
-		_ = c.logger.Log("method", "handleObject", "recovered tombstone", object.GetName())
+	object, err := c.asObject(obj)
+	if err != nil {
+		runtime.HandleError(err)
+		return
 	}
 	_ = c.logger.Log("method", "handleObject", "processing", object.GetName())
 	if ownerRef := metav1.GetControllerOf(object); ownerRef != nil {
@@ -515,6 +504,46 @@ func (c *controller) handleObject(obj interface{}) {
 		c.enqueueClientClaim(dclaim)
 		return
 	}
+}
+
+// handleDistccClient will take a DistccClient object and attempt to find all
+// the DistccClientClaims that refer to it. It then enqueues all of them.
+func (c *controller) handleDistccClient(obj interface{}) {
+	object, err := c.asObject(obj)
+	if err != nil {
+		runtime.HandleError(err)
+		return
+	}
+
+	// List all ClientClaims in this namespace and enqueue all the ones referencing this Client
+	dclaims, err := c.distccclaimsLister.DistccClientClaims(object.GetNamespace()).List(labels.Everything())
+	if err != nil {
+		_ = c.logger.Log("method", "handleDistccClient", "err", err.Error())
+		return
+	}
+	for _, dclaim := range dclaims {
+		if dclaim.Spec.DistccClientName == object.GetName() {
+			c.enqueueClientClaim(dclaim)
+		}
+	}
+}
+
+func (c *controller) asObject(obj interface{}) (metav1.Object, error) {
+	var object metav1.Object
+	var ok bool
+	if object, ok = obj.(metav1.Object); !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			return nil, errors.Errorf("error decoding object, invalid type")
+		}
+		object, ok = tombstone.Obj.(metav1.Object)
+		if !ok {
+			return nil, errors.Errorf("error decoding object tombstone, invalid type")
+		}
+		_ = c.logger.Log("method", "asObject", "recovered tombstone", object.GetName())
+		return object, nil
+	}
+	return object, nil
 }
 
 func (c *controller) updateExpiration(claim *k8ccv1alpha1.DistccClientClaim, client *k8ccv1alpha1.DistccClient) bool {
