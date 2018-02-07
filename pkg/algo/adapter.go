@@ -3,7 +3,7 @@ package algo
 import (
 	"time"
 
-	"github.com/mbrt/k8cc/pkg/controller/distcc"
+	"github.com/mbrt/k8cc/pkg/controller/distccold"
 	"github.com/mbrt/k8cc/pkg/data"
 	"github.com/mbrt/k8cc/pkg/state"
 )
@@ -12,7 +12,7 @@ import (
 // This is used to solve the circular dependency between the two objects
 type Adapter struct {
 	Controller Controller
-	Operator   distcc.Operator
+	Operator   distccold.Operator
 	State      state.TagsStater
 }
 

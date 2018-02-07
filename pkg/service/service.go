@@ -7,7 +7,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/mbrt/k8cc/pkg/algo"
-	"github.com/mbrt/k8cc/pkg/controller/distcc"
+	"github.com/mbrt/k8cc/pkg/controller/distccold"
 	"github.com/mbrt/k8cc/pkg/data"
 )
 
@@ -22,7 +22,7 @@ type Service interface {
 }
 
 // NewService creates the API service
-func NewService(c algo.Controller, k distcc.Operator) Service {
+func NewService(c algo.Controller, k distccold.Operator) Service {
 	return service{c, k}
 }
 
@@ -34,7 +34,7 @@ type Lease struct {
 
 type service struct {
 	controller algo.Controller
-	operator   distcc.Operator
+	operator   distccold.Operator
 }
 
 func (s service) LeaseUser(ctx context.Context, u data.User, t data.Tag) (Lease, error) {

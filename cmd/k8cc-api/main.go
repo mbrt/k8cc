@@ -13,7 +13,7 @@ import (
 	"github.com/mbrt/k8cc/pkg/algo"
 	"github.com/mbrt/k8cc/pkg/controller"
 	clientctrl "github.com/mbrt/k8cc/pkg/controller/client"
-	"github.com/mbrt/k8cc/pkg/controller/distcc"
+	"github.com/mbrt/k8cc/pkg/controller/distccold"
 	"github.com/mbrt/k8cc/pkg/service"
 	"github.com/mbrt/k8cc/pkg/state"
 )
@@ -45,7 +45,7 @@ func main() {
 	}
 
 	// load the state before to start anything
-	if err = state.LoadFrom(tagstate, distcc.NewStateLoader(sharedClient)); err != nil {
+	if err = state.LoadFrom(tagstate, distccold.NewStateLoader(sharedClient)); err != nil {
 		/* #nosec */
 		_ = logger.Log("err", err)
 		os.Exit(1)
@@ -53,7 +53,7 @@ func main() {
 
 	clientController := clientctrl.NewController(sharedClient, log.With(logger, "component", "client-controller"))
 
-	operator := distcc.NewOperator(sharedClient, adapter, log.With(logger, "component", "operator"))
+	operator := distccold.NewOperator(sharedClient, adapter, log.With(logger, "component", "operator"))
 
 	// set now the objects for the adapter
 	adapter.Controller = contr

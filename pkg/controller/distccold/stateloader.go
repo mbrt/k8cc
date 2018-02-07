@@ -1,4 +1,4 @@
-package distcc
+package distccold
 
 import (
 	"github.com/pkg/errors"

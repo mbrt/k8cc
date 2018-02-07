@@ -1,4 +1,4 @@
-package distcc
+package distccold
 
 // see https://github.com/kubernetes/community/blob/8cafef897a22026d42f5e5bb3f104febe7e29830/contributors/devel/controllers.md
 // and https://github.com/kubernetes/sample-controller/blob/master/controller.go

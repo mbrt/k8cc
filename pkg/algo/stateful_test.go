@@ -8,7 +8,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
-	distccmock "github.com/mbrt/k8cc/pkg/controller/distcc/mock"
+	distccmock "github.com/mbrt/k8cc/pkg/controller/distccold/mock"
 	"github.com/mbrt/k8cc/pkg/data"
 	"github.com/mbrt/k8cc/pkg/state"
 )
