@@ -1,0 +1,38 @@
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: distccs.k8cc.io
+spec:
+  group: k8cc.io
+  version: v1alpha1
+  names:
+    kind: Distcc
+    plural: distccs
+    singular: distcc
+  scope: Namespaced
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: distccclients.k8cc.io
+spec:
+  group: k8cc.io
+  version: v1alpha1
+  names:
+    kind: DistccClient
+    plural: distccclients
+    singular: distccclient
+  scope: Namespaced
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: distccclientclaims.k8cc.io
+spec:
+  group: k8cc.io
+  version: v1alpha1
+  names:
+    kind: DistccClientClaim
+    plural: distccclientclaims
+    singular: distccclientclaim
+  scope: Namespaced

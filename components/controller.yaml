@@ -1,0 +1,69 @@
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: k8cc-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: k8cc-controller
+subjects:
+- kind: ServiceAccount
+  name: k8cc-controller
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  name: k8cc-controller
+rules:
+- apiGroups:
+  - apps
+  resources:
+  - statefulsets
+  verbs: ["get", "update", "list"]
+- apiGroups: [""]
+  resources:
+  - pods
+  verbs: ["list"]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: k8cc-controller
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: k8cc-api
+  labels:
+    app: k8cc
+    tier: frontend
+spec:
+  ports:
+  - port: 80
+  selector:
+    app: k8cc
+    tier: frontend
+---
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: k8cc-api
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: k8cc
+        tier: frontend
+    spec:
+      containers:
+      - name: k8cc-controller
+        image: TODO
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+        ports:
+        - containerPort: 80
+      serviceAccountName: k8cc-controller
