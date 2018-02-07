@@ -129,8 +129,8 @@ func (s serviceLister) ListByName(namespace, name string) (runtime.Object, error
 	return s.lister.Services(namespace).Get(name)
 }
 
-func (d serviceLister) ListBySelector(namespace string, selector labels.Selector) ([]runtime.Object, error) {
-	ds, err := d.lister.Services(namespace).List(selector)
+func (s serviceLister) ListBySelector(namespace string, selector labels.Selector) ([]runtime.Object, error) {
+	ds, err := s.lister.Services(namespace).List(selector)
 	res := make([]runtime.Object, len(ds))
 	for i, d := range ds {
 		res[i] = d
