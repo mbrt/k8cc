@@ -77,6 +77,42 @@ type DistccList struct {
 // +genclient
 // +genclient:noStatus
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +resource:path=distccclaim
+
+// DistccClaim represents a request for some Distcc resources from a user
+type DistccClaim struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   DistccClaimSpec   `json:"spec"`
+	Status DistccClaimStatus `json:"status"`
+}
+
+// DistccClaimSpec is the spec for a DistccClaim resource
+type DistccClaimSpec struct {
+	DistccName string `json:"distccName"`
+	UserName   string `json:"userName"`
+}
+
+// DistccClaimStatus is the status for a DistccClaim resource
+type DistccClaimStatus struct {
+	ExpirationTime *metav1.Time `json:"expirationTime"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +resource:path=distccclaims
+
+// DistccClaimList is a list of DistccClaim resources
+type DistccClaimList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata"`
+
+	Items []DistccClaim `json:"items"`
+}
+
+// +genclient
+// +genclient:noStatus
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +resource:path=distccclient
 
 // DistccClient is a specification for a DistccClient resource
