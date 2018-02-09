@@ -26,6 +26,8 @@ import (
 type Interface interface {
 	// Distccs returns a DistccInformer.
 	Distccs() DistccInformer
+	// DistccClaims returns a DistccClaimInformer.
+	DistccClaims() DistccClaimInformer
 	// DistccClients returns a DistccClientInformer.
 	DistccClients() DistccClientInformer
 	// DistccClientClaims returns a DistccClientClaimInformer.
@@ -44,6 +46,11 @@ func New(f internalinterfaces.SharedInformerFactory) Interface {
 // Distccs returns a DistccInformer.
 func (v *version) Distccs() DistccInformer {
 	return &distccInformer{factory: v.SharedInformerFactory}
+}
+
+// DistccClaims returns a DistccClaimInformer.
+func (v *version) DistccClaims() DistccClaimInformer {
+	return &distccClaimInformer{factory: v.SharedInformerFactory}
 }
 
 // DistccClients returns a DistccClientInformer.

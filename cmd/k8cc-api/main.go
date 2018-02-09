@@ -12,7 +12,7 @@ import (
 
 	"github.com/mbrt/k8cc/pkg/algo"
 	"github.com/mbrt/k8cc/pkg/controller"
-	clientctrl "github.com/mbrt/k8cc/pkg/controller/client"
+	"github.com/mbrt/k8cc/pkg/controller/distccclient"
 	"github.com/mbrt/k8cc/pkg/controller/distccold"
 	"github.com/mbrt/k8cc/pkg/service"
 	"github.com/mbrt/k8cc/pkg/state"
@@ -51,7 +51,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	clientController := clientctrl.NewController(sharedClient, log.With(logger, "component", "client-controller"))
+	clientController := distccclient.NewController(sharedClient, log.With(logger, "component", "client-controller"))
 
 	operator := distccold.NewOperator(sharedClient, adapter, log.With(logger, "component", "operator"))
 

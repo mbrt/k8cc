@@ -26,6 +26,14 @@ type DistccListerExpansion interface{}
 // DistccNamespaceLister.
 type DistccNamespaceListerExpansion interface{}
 
+// DistccClaimListerExpansion allows custom methods to be added to
+// DistccClaimLister.
+type DistccClaimListerExpansion interface{}
+
+// DistccClaimNamespaceListerExpansion allows custom methods to be added to
+// DistccClaimNamespaceLister.
+type DistccClaimNamespaceListerExpansion interface{}
+
 // DistccClientListerExpansion allows custom methods to be added to
 // DistccClientLister.
 type DistccClientListerExpansion interface{}

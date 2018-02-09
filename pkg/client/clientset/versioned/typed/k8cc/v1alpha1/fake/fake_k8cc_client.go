@@ -30,6 +30,10 @@ func (c *FakeK8ccV1alpha1) Distccs(namespace string) v1alpha1.DistccInterface {
 	return &FakeDistccs{c, namespace}
 }
 
+func (c *FakeK8ccV1alpha1) DistccClaims(namespace string) v1alpha1.DistccClaimInterface {
+	return &FakeDistccClaims{c, namespace}
+}
+
 func (c *FakeK8ccV1alpha1) DistccClients(namespace string) v1alpha1.DistccClientInterface {
 	return &FakeDistccClients{c, namespace}
 }

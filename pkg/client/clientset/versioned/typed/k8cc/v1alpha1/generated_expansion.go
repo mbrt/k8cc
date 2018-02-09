@@ -18,6 +18,8 @@ package v1alpha1
 
 type DistccExpansion interface{}
 
+type DistccClaimExpansion interface{}
+
 type DistccClientExpansion interface{}
 
 type DistccClientClaimExpansion interface{}

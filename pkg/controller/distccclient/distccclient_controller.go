@@ -1,4 +1,4 @@
-package client
+package distccclient
 
 import (
 	"fmt"
@@ -58,16 +58,11 @@ const (
 	SSHPort = 22
 )
 
-// Controller is responsible for DistccClient and DistccClientClaim objects management
-type Controller interface {
-	Run(threadiness int, stopCh <-chan struct{}) error
-}
-
 // NewController creates a new Controller
 func NewController(
 	sharedClient *sharedctr.SharedClient,
 	logger log.Logger,
-) Controller {
+) sharedctr.Controller {
 	deployInformer := sharedClient.KubeInformerFactory.Apps().V1beta2().Deployments()
 	serviceInformer := sharedClient.KubeInformerFactory.Core().V1().Services()
 	distccInformer := sharedClient.DistccInformerFactory.K8cc().V1alpha1().DistccClients()

@@ -26,6 +26,7 @@ import (
 type K8ccV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	DistccsGetter
+	DistccClaimsGetter
 	DistccClientsGetter
 	DistccClientClaimsGetter
 }
@@ -37,6 +38,10 @@ type K8ccV1alpha1Client struct {
 
 func (c *K8ccV1alpha1Client) Distccs(namespace string) DistccInterface {
 	return newDistccs(c, namespace)
+}
+
+func (c *K8ccV1alpha1Client) DistccClaims(namespace string) DistccClaimInterface {
+	return newDistccClaims(c, namespace)
 }
 
 func (c *K8ccV1alpha1Client) DistccClients(namespace string) DistccClientInterface {

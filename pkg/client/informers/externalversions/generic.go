@@ -54,6 +54,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 	// Group=K8cc, Version=V1alpha1
 	case v1alpha1.SchemeGroupVersion.WithResource("distccs"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.K8cc().V1alpha1().Distccs().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("distccclaims"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.K8cc().V1alpha1().DistccClaims().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("distccclients"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.K8cc().V1alpha1().DistccClients().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("distccclientclaims"):
