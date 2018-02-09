@@ -1,6 +1,6 @@
 .PHONY: all
 all:
-	go build ./cmd/k8cc-api
+	go build ./cmd/k8cc-controller
 
 .PHONY: test
 test:

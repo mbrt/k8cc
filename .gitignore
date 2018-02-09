@@ -12,6 +12,7 @@
 
 # executables
 /k8cc-api
+/k8cc-controller
 
 # editor ignores
 *.swp
