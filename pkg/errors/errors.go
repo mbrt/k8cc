@@ -10,6 +10,9 @@ func IsTransient(err error) bool {
 
 // TransientError wraps the given error and makes it into a transient one
 func TransientError(err error) error {
+	if err == nil {
+		return nil
+	}
 	return transientError{err}
 }
 

@@ -101,7 +101,7 @@ func (c *controller) Sync(object runtime.Object) (bool, error) {
 			// The referring DistccClient is invalid, stop processing this element
 			return false, errors.Errorf("distccclient '%s' is not present", claim.Spec.DistccClientName)
 		}
-		return false, err
+		return false, k8ccerr.TransientError(err)
 	}
 
 	// NEVER modify objects from the store. It's a read-only, local cache.
@@ -117,7 +117,8 @@ func (c *controller) Sync(object runtime.Object) (bool, error) {
 
 	// Check expiration time, and in case delete the resource
 	if c.isExpired(claim, dclient) {
-		return false, c.k8ccclientset.K8ccV1alpha1().DistccClientClaims(namespace).Delete(name, nil)
+		return false, k8ccerr.TransientError(
+			c.k8ccclientset.K8ccV1alpha1().DistccClientClaims(namespace).Delete(name, nil))
 	}
 
 	// Check the related Deployment
@@ -134,7 +135,7 @@ func (c *controller) Sync(object runtime.Object) (bool, error) {
 
 	if changed.Any() {
 		_, err = c.k8ccclientset.K8ccV1alpha1().DistccClientClaims(namespace).Update(claim)
-		return true, err
+		return true, k8ccerr.TransientError(err)
 	}
 
 	return false, nil
