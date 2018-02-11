@@ -5,11 +5,13 @@ package kit
 // and https://github.com/kubernetes/kubernetes/blob/master/pkg/controller/podautoscaler/horizontal.go
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
+	kubeerr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -24,6 +26,14 @@ import (
 	k8ccscheme "github.com/mbrt/k8cc/pkg/client/clientset/versioned/scheme"
 	sharedctr "github.com/mbrt/k8cc/pkg/controller"
 	k8ccerr "github.com/mbrt/k8cc/pkg/errors"
+)
+
+const (
+	// SuccessSynced is used as part of the Event 'reason' when an object is synced
+	SuccessSynced = "Synced"
+	// MessageResourceSynced is the message used for an Event fired when an object
+	// is synced successfully
+	MessageResourceSynced = "%s synced successfully"
 )
 
 // ControllerKit abstracts away some of the boring details from a controller
@@ -48,14 +58,12 @@ type ControllerKit interface {
 // controller should manage. The controlledObjectsInformers list is a list of
 // informers for objects that can be owned by the CRD. Whenever these objects are
 // owned by the given CRD and they change, they will trigger a Sync for the owner
-// CRD. The needPeriodicResync option states whether a periodic Sync is needed
-// for the CRDs even if they didn't change.
+// CRD.
 func NewController(
 	handler ControllerHandler,
 	kubeclientset kubernetes.Interface,
 	crdInformer cache.SharedInformer,
 	controlledObjectsInformers []cache.SharedInformer,
-	needPeriodicResync bool,
 ) ControllerKit {
 	// Create event broadcaster
 	// Add the CRD types to the default Kubernetes Scheme so Events can be
@@ -90,7 +98,7 @@ func NewController(
 			// we take advantage of periodic updates and pass them on to the controller.
 			newObj := new.(*corev1.ObjectMeta)
 			oldObj := old.(*corev1.ObjectMeta)
-			if needPeriodicResync || newObj.ResourceVersion != oldObj.ResourceVersion {
+			if handler.NeedPeriodicSync() || newObj.ResourceVersion != oldObj.ResourceVersion {
 				op.enqueueCustomResource(new)
 			}
 		},
@@ -123,13 +131,18 @@ type ControllerHandler interface {
 	// the sync, an error needs to be returned. If that error is caused by a transient
 	// cause (e.g. temporary network failure), make sure you return a TransientError, so
 	// the same object will be retried without waiting for a change.
-	Sync(key string) error
+	// The bool return value specifies whether changes happened to reconcile the state.
+	// If so, an event will be emitted.
+	Sync(object runtime.Object) (bool, error)
 	// CustomResourceKind returns the kind of the controlled resource, as it is specified
 	// by the CRD manifest.
 	CustomResourceKind() string
 	// CustomResourceInstance returns the instance of the CustomResourceDefinition with
 	// the given key (namespace, name).
 	CustomResourceInstance(namespace, name string) (runtime.Object, error)
+	// NeedPeriodicSync states whether a periodic Sync is needed for the CRDs even if
+	// they didn't change
+	NeedPeriodicSync() bool
 }
 
 // controllerKit abstracts away some tedous details over implementing a Kubernetes controller
@@ -226,19 +239,15 @@ func (c *controllerKit) processNextWorkItem() bool {
 		}
 		// Run the syncHandler, passing it the namespace/name string of the
 		// Distcc resource to be synced.
-		if err := c.handler.Sync(key); err != nil {
+		if err := c.syncHandler(key); err != nil {
 			// If an error is transient, we'll requeue the item so we can attempt
 			// processing again later. This could have been caused by a
 			// temporary network failure, or any other transient reason.
-			// Otherwise we just fail permanently and wait for the object to change,
-			// before to attempt processing it again.
 			if k8ccerr.IsTransient(err) {
 				return err
 			}
-			// If an error has an event attached, we'll record it.
-			if evt, ok := HasEvent(err); ok {
-				c.recorder.Event(evt.Object, evt.Type, evt.Reason, evt.Message)
-			}
+			// Otherwise we just fail permanently and wait for the object to change,
+			// before to attempt processing it again.
 			utilruntime.HandleError(err)
 			return nil
 		}
@@ -256,6 +265,42 @@ func (c *controllerKit) processNextWorkItem() bool {
 	}
 
 	return true
+}
+
+// syncHandler compares the actual state with the desired, and attempts to
+// converge the two.
+func (c *controllerKit) syncHandler(key string) error {
+	glog.V(4).Infof("syncHandler for key %s", key)
+
+	// Convert the namespace/name string into a distinct namespace and name
+	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	if err != nil {
+		return errors.Errorf("invalid resource key: %s", key)
+	}
+	kind := c.handler.CustomResourceKind()
+	crd, err := c.handler.CustomResourceInstance(namespace, name)
+	if err != nil {
+		// The CRD resource may no longer exist, in which case we stop processing.
+		if kubeerr.IsNotFound(err) {
+			return errors.Errorf("%s '%s' in work queue no longer exists", kind, key)
+		}
+		return err
+	}
+
+	// Ask the handler to Sync
+	updated, err := c.handler.Sync(crd)
+	if err != nil {
+		// If an error has an event attached, we'll record it.
+		if evt, ok := HasEvent(err); ok {
+			c.recorder.Event(crd, evt.Type, evt.Reason, evt.Message)
+		}
+		return err
+	}
+	if updated {
+		// Fire a sync event only if there's been an update
+		c.recorder.Event(crd, corev1.EventTypeNormal, SuccessSynced, fmt.Sprintf(MessageResourceSynced, kind))
+	}
+	return nil
 }
 
 // enqueueCustomResource takes the controlled CRD and converts it into a
@@ -326,7 +371,6 @@ func (c *controllerKit) handleObjectUpdate(old, new interface{}) {
 
 // Event contains the information to create an Event attached to a kubernetes object.
 type Event struct {
-	Object  runtime.Object
 	Type    string
 	Reason  string
 	Message string
