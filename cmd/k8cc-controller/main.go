@@ -11,7 +11,7 @@ import (
 
 	"github.com/mbrt/k8cc/pkg/controller"
 	"github.com/mbrt/k8cc/pkg/controller/distcc"
-	"github.com/mbrt/k8cc/pkg/controller/distccclient"
+	"github.com/mbrt/k8cc/pkg/controller/distccclientclaim"
 )
 
 func main() {
