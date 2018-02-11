@@ -5,8 +5,8 @@ all:
 .PHONY: test
 test:
 	go test ./...
-	gometalinter --vendor --skip=pkg/client --skip=pkg/apis ./...
 	./hack/verify-codegen.sh
+	gometalinter --vendor --skip=pkg/client --skip=pkg/apis ./...
 
 .PHONY: gen
 gen:

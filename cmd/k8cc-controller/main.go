@@ -36,7 +36,7 @@ func main() {
 	}
 
 	controllers := []controller.Controller{
-		distccclient.NewController(sharedClient, log.With(logger, "component", "client-controller")),
+		distccclient.NewController(sharedClient),
 		distcc.NewController(sharedClient),
 	}
 
