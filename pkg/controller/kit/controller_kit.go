@@ -78,10 +78,12 @@ func NewController(
 
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: handler.AgentName()})
 
-	informersSynced := make([]cache.InformerSynced, len(controlledObjectsInformers)+1)
+	informersSynced := make([]cache.InformerSynced, len(controlledObjectsInformers))
 	for i, informer := range controlledObjectsInformers {
 		informersSynced[i] = informer.HasSynced
 	}
+	informersSynced = append(informersSynced, crdInformer.HasSynced)
+
 	op := controllerKit{
 		handler:         handler,
 		informersSynced: informersSynced,
@@ -96,9 +98,9 @@ func NewController(
 		UpdateFunc: func(old, new interface{}) {
 			// if the controller needs periodic resync we ignore the old == new check.
 			// we take advantage of periodic updates and pass them on to the controller.
-			newObj := new.(*corev1.ObjectMeta)
-			oldObj := old.(*corev1.ObjectMeta)
-			if handler.NeedPeriodicSync() || newObj.ResourceVersion != oldObj.ResourceVersion {
+			newObj := new.(metav1.Object)
+			oldObj := old.(metav1.Object)
+			if handler.NeedPeriodicSync() || newObj.GetResourceVersion() != oldObj.GetResourceVersion() {
 				op.enqueueCustomResource(new)
 			}
 		},
@@ -255,7 +257,7 @@ func (c *controllerKit) processNextWorkItem() bool {
 		// Finally, if no error occurs we Forget this item so it does not
 		// get queued again until another change happens.
 		c.workqueue.Forget(obj)
-		glog.Infof("Successfully synced '%s'", key)
+		glog.V(4).Infof("Successfully synced '%s'", key)
 		return nil
 	}(obj)
 
@@ -341,14 +343,15 @@ func (c *controllerKit) handleObject(obj interface{}) {
 	if ownerRef := metav1.GetControllerOf(object); ownerRef != nil {
 		// If this object is not owned by a Distcc, we should not do anything more
 		// with it.
-		if ownerRef.Kind != c.handler.CustomResourceKind() {
+		kind := c.handler.CustomResourceKind()
+		if ownerRef.Kind != kind {
 			return
 		}
 
 		crd, err := c.handler.CustomResourceInstance(object.GetNamespace(), ownerRef.Name)
 		if err != nil {
-			glog.V(4).Infof("ignoring orphaned object '%s' of foo '%s'",
-				object.GetSelfLink(), ownerRef.Name)
+			glog.V(4).Infof("ignoring orphaned object '%s' of %s '%s'",
+				object.GetSelfLink(), kind, ownerRef.Name)
 			return
 		}
 
@@ -358,9 +361,9 @@ func (c *controllerKit) handleObject(obj interface{}) {
 }
 
 func (c *controllerKit) handleObjectUpdate(old, new interface{}) {
-	newObj := new.(*corev1.ObjectMeta)
-	oldObj := old.(*corev1.ObjectMeta)
-	if newObj.ResourceVersion == oldObj.ResourceVersion {
+	newObj := new.(metav1.Object)
+	oldObj := old.(metav1.Object)
+	if newObj.GetResourceVersion() == oldObj.GetResourceVersion() {
 		// Periodic resync will send update events for all known objects that could be
 		// referenced by one of our Custom Resources.
 		// Two different versions of the same Deployment will always have different RVs.
