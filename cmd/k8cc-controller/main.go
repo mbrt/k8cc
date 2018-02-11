@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/go-kit/kit/log"
+	"github.com/golang/glog"
 
 	"github.com/mbrt/k8cc/pkg/controller"
 	"github.com/mbrt/k8cc/pkg/controller/distcc"
@@ -21,17 +21,9 @@ func main() {
 	)
 	flag.Parse()
 
-	var logger log.Logger
-	{
-		logger = log.NewLogfmtLogger(os.Stderr)
-		logger = log.With(logger, "ts", log.DefaultTimestampUTC)
-		logger = log.With(logger, "caller", log.DefaultCaller)
-	}
-
 	sharedClient, err := controller.NewSharedClient(*kubeMasterURL, *kubeConfig)
 	if err != nil {
-		/* #nosec */
-		_ = logger.Log("err", err)
+		glog.Errorf("error: %s", err)
 		os.Exit(1)
 	}
 
@@ -64,6 +56,5 @@ func main() {
 		errs <- err
 	}
 
-	/* #nosec */
-	_ = logger.Log("exit", <-errs)
+	glog.Errorf("exit: %s", <-errs)
 }
