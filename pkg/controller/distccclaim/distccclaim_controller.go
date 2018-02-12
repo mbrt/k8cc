@@ -18,6 +18,7 @@ import (
 	"github.com/mbrt/k8cc/pkg/controller/kit"
 	"github.com/mbrt/k8cc/pkg/conv"
 	k8ccerr "github.com/mbrt/k8cc/pkg/errors"
+	labels "k8s.io/apimachinery/pkg/labels"
 )
 
 const (
@@ -77,11 +78,23 @@ func (c *controller) Sync(object runtime.Object) (bool, error) {
 		})
 	}
 
-	// get the corresponding Distcc
+	// Get the corresponding Distcc
 	distcc, err := c.distccsLister.Distccs(claim.Namespace).Get(claim.Spec.DistccName)
 	if err != nil {
 		// If the resource doesn't exist, we need to wait
 		msg := fmt.Sprintf("referenced Distcc %s not present yet", claim.Spec.DistccName)
+		return false, kit.EventfulError(errors.New(msg), kit.Event{
+			Type:    corev1.EventTypeWarning,
+			Reason:  ErrDistccNotFound,
+			Message: msg,
+		})
+	}
+
+	// Check that the distcc labels match, otherwise it will be impossible for the distcc
+	// controller to take this claim into account
+	if !labels.Set(distcc.Labels).AsSelector().Matches(labels.Set(claim.Labels)) {
+		msg := fmt.Sprintf("metadata.Labels cannot be matched by the referenced Distcc %s",
+			claim.Spec.DistccName)
 		return false, kit.EventfulError(errors.New(msg), kit.Event{
 			Type:    corev1.EventTypeWarning,
 			Reason:  ErrDistccNotFound,
@@ -108,6 +121,11 @@ func (c *controller) Sync(object runtime.Object) (bool, error) {
 	}
 
 	return false, nil
+}
+
+func (c *controller) OnControlledObjectUpdate(object interface{}) (interface{}, error) {
+	// No custom discovery required
+	return nil, nil
 }
 
 func (c *controller) CustomResourceKind() string {

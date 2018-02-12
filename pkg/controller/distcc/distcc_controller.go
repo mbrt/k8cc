@@ -115,7 +115,16 @@ func (c *controller) CustomResourceInstance(namespace, name string) (runtime.Obj
 }
 
 func (c *controller) NeedPeriodicSync() bool {
-	return false
+	return true
+}
+
+func (c *controller) OnControlledObjectUpdate(object interface{}) (interface{}, error) {
+	claim, ok := object.(*k8ccv1alpha1.DistccClaim)
+	if !ok {
+		// Not interested in this object
+		return nil, nil
+	}
+	return c.distccsLister.Distccs(claim.Namespace).Get(claim.Spec.DistccName)
 }
 
 func (c *controller) syncDeployment(distcc *k8ccv1alpha1.Distcc) (distccUpdateState, error) {

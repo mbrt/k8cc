@@ -145,6 +145,14 @@ type ControllerHandler interface {
 	// NeedPeriodicSync states whether a periodic Sync is needed for the CRDs even if
 	// they didn't change
 	NeedPeriodicSync() bool
+	// OnControlledObjectUpdate is called whenever an object that could be controlled
+	// by a custom resource is updated.
+	//
+	// If the objects points to a custom resource that you want to handle, you can
+	// return it. It is going to be put in the work queue.
+	// The owner reference is checked by default and you don't need to implement this
+	// method if you need only that discovery method.
+	OnControlledObjectUpdate(object interface{}) (interface{}, error)
 }
 
 // controllerKit abstracts away some tedous details over implementing a Kubernetes controller
@@ -340,6 +348,16 @@ func (c *controllerKit) handleObject(obj interface{}) {
 		glog.V(4).Infof("Recovered deleted object '%s' from tombstone", object.GetName())
 	}
 	glog.V(4).Infof("Processing object: %s", object.GetName())
+
+	crd, err := c.handler.OnControlledObjectUpdate(obj)
+	if err != nil {
+		utilruntime.HandleError(errors.Wrap(err, "error in OnControlledObjectUpdate: ignoring"))
+		return
+	}
+	if crd != nil {
+		c.enqueueCustomResource(crd)
+	}
+
 	if ownerRef := metav1.GetControllerOf(object); ownerRef != nil {
 		// If this object is not owned by a Distcc, we should not do anything more
 		// with it.

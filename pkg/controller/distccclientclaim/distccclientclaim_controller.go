@@ -153,6 +153,11 @@ func (c *controller) NeedPeriodicSync() bool {
 	return true
 }
 
+func (c *controller) OnControlledObjectUpdate(object interface{}) (interface{}, error) {
+	// No custom discovery required
+	return nil, nil
+}
+
 func (c *controller) syncDeploy(claim *k8ccv1alpha1.DistccClientClaim, client *k8ccv1alpha1.DistccClient) (bool, error) {
 	// Try to retreive the existing deployment through the status reference, or the labels selector
 	obj, err := sharedctr.GetObjectFromReferenceOrSelector(
