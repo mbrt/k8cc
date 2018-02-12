@@ -91,8 +91,8 @@ func (c *controller) AgentName() string {
 
 func (c *controller) Sync(object runtime.Object) (bool, error) {
 	claim := object.(*k8ccv1alpha1.DistccClientClaim)
-	name := claim.Name
 	namespace := claim.Namespace
+	name := claim.Name
 
 	// Get the corresponding DistccClient resource
 	dclient, err := c.distccclientsLister.DistccClients(namespace).Get(claim.Spec.DistccClientName)
@@ -116,9 +116,9 @@ func (c *controller) Sync(object runtime.Object) (bool, error) {
 	}
 
 	// Check expiration time, and in case delete the resource
-	if c.isExpired(claim, dclient) {
-		return false, k8ccerr.TransientError(
-			c.k8ccclientset.K8ccV1alpha1().DistccClientClaims(namespace).Delete(name, nil))
+	if c.isExpired(claim) {
+		err = c.k8ccclientset.K8ccV1alpha1().DistccClientClaims(namespace).Delete(name, nil)
+		return false, k8ccerr.TransientError(err)
 	}
 
 	// Check the related Deployment
@@ -292,7 +292,7 @@ func (c *controller) updateExpiration(claim *k8ccv1alpha1.DistccClientClaim, cli
 	return false
 }
 
-func (c *controller) isExpired(claim *k8ccv1alpha1.DistccClientClaim, client *k8ccv1alpha1.DistccClient) bool {
+func (c *controller) isExpired(claim *k8ccv1alpha1.DistccClientClaim) bool {
 	return time.Now().After(claim.Status.ExpirationTime.Time)
 }
 

@@ -246,11 +246,11 @@ func (c *controllerKit) processNextWorkItem() bool {
 			// processing again later. This could have been caused by a
 			// temporary network failure, or any other transient reason.
 			if k8ccerr.IsTransient(err) {
-				return err
+				return errors.Wrap(err, fmt.Sprintf("transient error syncinc %s", key))
 			}
 			// Otherwise we just fail permanently and wait for the object to change,
 			// before to attempt processing it again.
-			utilruntime.HandleError(err)
+			utilruntime.HandleError(errors.Wrap(err, fmt.Sprintf("error syncing %s", key)))
 			return nil
 		}
 

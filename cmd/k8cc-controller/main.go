@@ -11,6 +11,7 @@ import (
 
 	"github.com/mbrt/k8cc/pkg/controller"
 	"github.com/mbrt/k8cc/pkg/controller/distcc"
+	"github.com/mbrt/k8cc/pkg/controller/distccclaim"
 	"github.com/mbrt/k8cc/pkg/controller/distccclientclaim"
 )
 
@@ -28,8 +29,9 @@ func main() {
 	}
 
 	controllers := []controller.Controller{
-		distccclient.NewController(sharedClient),
 		distcc.NewController(sharedClient),
+		distccclaim.NewController(sharedClient),
+		distccclient.NewController(sharedClient),
 	}
 
 	errs := make(chan error, 1)

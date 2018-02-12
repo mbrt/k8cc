@@ -41,7 +41,7 @@ const (
 
 const controllerAgentName = "k8cc-distcc-controller"
 
-// controller controls tag deployments as a regular Kubernetes controller
+// controller controls Distcc objects
 type controller struct {
 	kubeclientset kubernetes.Interface
 	k8ccclientset clientset.Interface
@@ -115,7 +115,7 @@ func (c *controller) CustomResourceInstance(namespace, name string) (runtime.Obj
 }
 
 func (c *controller) NeedPeriodicSync() bool {
-	return true
+	return false
 }
 
 func (c *controller) syncDeployment(distcc *k8ccv1alpha1.Distcc) (distccUpdateState, error) {
