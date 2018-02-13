@@ -37,7 +37,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	backend := apibackend.NewKubeBackend(sharedClient)
+	backend := apibackend.NewKubeBackend(sharedClient, log.With(logger, "component", "Backend"))
 
 	var s service.Service
 	{

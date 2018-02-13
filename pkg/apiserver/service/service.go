@@ -4,15 +4,13 @@ import (
 	"context"
 	"time"
 
-	"github.com/pkg/errors"
-
 	"github.com/mbrt/k8cc/pkg/apiserver/backend"
 	"github.com/mbrt/k8cc/pkg/data"
 )
 
 var (
 	// ErrCanceled is used when the request cannot be satisfied on time
-	ErrCanceled = errors.New("timeout or canceled")
+	ErrCanceled = backend.ErrCanceled
 )
 
 // Service is an interface that implements all the APIs.
