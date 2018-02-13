@@ -10,11 +10,9 @@ import (
 
 	"github.com/go-kit/kit/log"
 
-	"github.com/mbrt/k8cc/pkg/algo"
+	apibackend "github.com/mbrt/k8cc/pkg/apiserver/backend"
+	"github.com/mbrt/k8cc/pkg/apiserver/service"
 	"github.com/mbrt/k8cc/pkg/controller"
-	"github.com/mbrt/k8cc/pkg/controller/distccold"
-	"github.com/mbrt/k8cc/pkg/service"
-	"github.com/mbrt/k8cc/pkg/state"
 )
 
 func main() {
@@ -32,10 +30,6 @@ func main() {
 		logger = log.With(logger, "caller", log.DefaultCaller)
 	}
 
-	adapter := &algo.Adapter{}
-	tagstate := state.NewInMemoryState()
-	contr := algo.NewStatefulController(adapter, tagstate, adapter, log.With(logger, "component", "controller"))
-
 	sharedClient, err := controller.NewSharedClient(*kubeMasterURL, *kubeConfig)
 	if err != nil {
 		/* #nosec */
@@ -43,23 +37,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	// load the state before to start anything
-	if err = state.LoadFrom(tagstate, distccold.NewStateLoader(sharedClient)); err != nil {
-		/* #nosec */
-		_ = logger.Log("err", err)
-		os.Exit(1)
-	}
-
-	operator := distccold.NewOperator(sharedClient, adapter, log.With(logger, "component", "operator"))
-
-	// set now the objects for the adapter
-	adapter.Controller = contr
-	adapter.Operator = operator
-	adapter.State = tagstate
+	backend := apibackend.NewKubeBackend(sharedClient)
 
 	var s service.Service
 	{
-		s = service.NewService(contr, operator)
+		s = service.NewService(backend)
 		s = service.LoggingMiddleware(logger)(s)
 	}
 
@@ -92,9 +74,9 @@ func main() {
 	}()
 
 	// this last one takes ownership of the main goroutine
-	if err = operator.Run(2, stopCh); err != nil {
-		errs <- err
-	}
+	//if err = operator.Run(2, stopCh); err != nil {
+	//	errs <- err
+	//}
 
 	/* #nosec */
 	_ = logger.Log("exit", <-errs)

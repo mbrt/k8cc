@@ -22,7 +22,6 @@ import (
 	sharedctr "github.com/mbrt/k8cc/pkg/controller"
 	"github.com/mbrt/k8cc/pkg/controller/kit"
 	"github.com/mbrt/k8cc/pkg/conv"
-	"github.com/mbrt/k8cc/pkg/data"
 	k8ccerr "github.com/mbrt/k8cc/pkg/errors"
 )
 
@@ -119,6 +118,7 @@ func (c *controller) NeedPeriodicSync() bool {
 }
 
 func (c *controller) OnControlledObjectUpdate(object interface{}) (interface{}, error) {
+	// We want to enqueue the Distcc referenced by a DistccClaim
 	claim, ok := object.(*k8ccv1alpha1.DistccClaim)
 	if !ok {
 		// Not interested in this object
@@ -211,15 +211,12 @@ func (c *controller) desiredReplicas(distcc *k8ccv1alpha1.Distcc) (int32, error)
 }
 
 func (c *controller) syncService(distcc *k8ccv1alpha1.Distcc) (bool, error) {
-	// The build tag is the name of the Distcc resource
-	tag := data.Tag{Namespace: distcc.Namespace, Name: distcc.Name}
-
 	serviceName := distcc.Spec.ServiceName
 	if serviceName == "" {
 		// We choose to absorb the error here as the worker would requeue the
 		// resource otherwise. Instead, the next time the resource is updated
 		// the resource will be queued again.
-		return false, errors.Errorf("%s: service name must be specified", tag)
+		return false, errors.New("spec.ServiceName must be specified")
 	}
 
 	// Get the service with the name specified in Distcc.Spec

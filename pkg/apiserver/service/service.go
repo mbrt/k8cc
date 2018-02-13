@@ -6,8 +6,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/mbrt/k8cc/pkg/algo"
-	"github.com/mbrt/k8cc/pkg/controller/distccold"
+	"github.com/mbrt/k8cc/pkg/apiserver/backend"
 	"github.com/mbrt/k8cc/pkg/data"
 )
 
@@ -22,8 +21,8 @@ type Service interface {
 }
 
 // NewService creates the API service
-func NewService(c algo.Controller, k distccold.Operator) Service {
-	return service{c, k}
+func NewService(b backend.Backend) Service {
+	return service{b}
 }
 
 // Lease contains info about a lease for a specific user and tag
@@ -33,19 +32,16 @@ type Lease struct {
 }
 
 type service struct {
-	controller algo.Controller
-	operator   distccold.Operator
+	backend backend.Backend
 }
 
 func (s service) LeaseUser(ctx context.Context, u data.User, t data.Tag) (Lease, error) {
-	lease, err := s.controller.TagController(t).LeaseUser(ctx, u, time.Now())
+	host, err := s.backend.LeaseDistcc(ctx, u, t)
 	if err != nil {
 		return Lease{}, err
 	}
-	err = s.operator.NotifyUpdated(t)
 	result := Lease{
-		Expiration: lease.Expiration,
-		Hosts:      lease.Hosts,
+		Hosts: []string{string(host)},
 	}
 	return result, err
 }

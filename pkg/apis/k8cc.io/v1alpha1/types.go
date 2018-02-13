@@ -52,16 +52,6 @@ type DistccSpec struct {
 type DistccStatus struct {
 	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
 	LastScaleTime  *metav1.Time `json:"lastScaleTime,omitempty"`
-
-	// FIXME: Deprecated, remove
-	Leases []DistccLease `json:"leases,omitempty"`
-}
-
-// DistccLease contains info about a user lease
-type DistccLease struct {
-	UserName         string      `json:"userName"`
-	ExpirationTime   metav1.Time `json:"expirationTime"`
-	AssignedOrdinals []int32     `json:"assignedOrdinals"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
