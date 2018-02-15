@@ -18,7 +18,7 @@ package versioned
 
 import (
 	glog "github.com/golang/glog"
-	k8ccv1alpha1 "github.com/mbrt/k8cc/pkg/client/clientset/versioned/typed/k8cc/v1alpha1"
+	k8ccv1alpha1 "github.com/mbrt/k8cc/pkg/client/clientset/versioned/typed/k8cc.io/v1alpha1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"

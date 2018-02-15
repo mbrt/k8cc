@@ -56,11 +56,11 @@ func (b *kubeBackend) LeaseDistcc(ctx context.Context, user data.User, tag data.
 		case <-ctx.Done():
 			_ = b.logger.Log("contenxt timed out")
 			return false, ErrCanceled
-		case err := <-vchan:
-			if err != nil {
+		case rerr := <-vchan:
+			if rerr != nil {
 				_ = b.logger.Log("err", err)
 			}
-			return err == nil, nil
+			return rerr == nil, nil
 		}
 	})
 	host := fmt.Sprintf("%s.%s", distcc.Spec.ServiceName, tag.Namespace)

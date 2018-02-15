@@ -13,7 +13,7 @@ import (
 
 	k8ccv1alpha1 "github.com/mbrt/k8cc/pkg/apis/k8cc.io/v1alpha1"
 	clientset "github.com/mbrt/k8cc/pkg/client/clientset/versioned"
-	listers "github.com/mbrt/k8cc/pkg/client/listers/k8cc/v1alpha1"
+	listers "github.com/mbrt/k8cc/pkg/client/listers/k8cc.io/v1alpha1"
 	sharedctr "github.com/mbrt/k8cc/pkg/controller"
 	"github.com/mbrt/k8cc/pkg/controller/kit"
 	"github.com/mbrt/k8cc/pkg/conv"
