@@ -47,18 +47,18 @@ func (b *kubeBackend) LeaseDistcc(ctx context.Context, user data.User, tag data.
 	if err != nil {
 		return "", errors.Wrap(err, "failed to get Distcc object")
 	}
-	vchan := make(chan error)
+	rchan := make(chan error)
 	err = wait.ExponentialBackoff(backoff, func() (bool, error) {
 		go func() {
-			vchan <- b.renewDistccLease(ctx, user, distcc)
+			rchan <- b.renewDistccLease(ctx, user, distcc)
 		}()
 		select {
 		case <-ctx.Done():
 			_ = b.logger.Log("contenxt timed out")
 			return false, ErrCanceled
-		case rerr := <-vchan:
+		case rerr := <-rchan:
 			if rerr != nil {
-				_ = b.logger.Log("err", err)
+				_ = b.logger.Log("err", rerr)
 			}
 			return rerr == nil, nil
 		}
@@ -92,6 +92,10 @@ func (b *kubeBackend) renewDistccLease(ctx context.Context, user data.User, dist
 
 func newDistccClaim(user data.User, distcc *k8ccv1alpha1.Distcc) *k8ccv1alpha1.DistccClaim {
 	return &k8ccv1alpha1.DistccClaim{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "k8cc.io/v1alpha1",
+			Kind:       "DistccClaim",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      makeClaimName(user, distcc.Name),
 			Namespace: distcc.Namespace,

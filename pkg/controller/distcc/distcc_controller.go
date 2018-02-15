@@ -207,7 +207,17 @@ func (c *controller) desiredReplicas(distcc *k8ccv1alpha1.Distcc) (int32, error)
 			validClaims++
 		}
 	}
-	return validClaims * distcc.Spec.UserReplicas, nil
+	idealReplicas := validClaims * distcc.Spec.UserReplicas
+
+	// Comply with min and max replicas
+	if idealReplicas >= distcc.Spec.MaxReplicas {
+		return distcc.Spec.MaxReplicas, nil
+	}
+	minReplicas := distcc.Spec.MinReplicas
+	if minReplicas != nil && idealReplicas < *minReplicas {
+		return *minReplicas, nil
+	}
+	return idealReplicas, nil
 }
 
 func (c *controller) syncService(distcc *k8ccv1alpha1.Distcc) (bool, error) {
