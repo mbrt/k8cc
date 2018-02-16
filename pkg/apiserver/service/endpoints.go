@@ -11,38 +11,38 @@ import (
 
 // Endpoints collects all the api endpoints in a single struct
 type Endpoints struct {
-	PutLeaseUserEndpoint endpoint.Endpoint
+	PutLeaseDistccEndpoint endpoint.Endpoint
 }
 
 // MakeEndpoints creates the api endpoints, wiring in the given service
 func MakeEndpoints(s Service) Endpoints {
 	return Endpoints{
-		PutLeaseUserEndpoint: MakePutLeaseUserEndpoint(s),
+		PutLeaseDistccEndpoint: MakePutLeaseDistccEndpoint(s),
 	}
 }
 
-// MakePutLeaseUserEndpoint creates an endpoint for the GetHosts service
-func MakePutLeaseUserEndpoint(s Service) endpoint.Endpoint {
+// MakePutLeaseDistccEndpoint creates an endpoint for the GetHosts service
+func MakePutLeaseDistccEndpoint(s Service) endpoint.Endpoint {
 	return func(ctx context.Context, request interface{}) (response interface{}, err error) {
-		req := request.(putLeaseUserRequest)
-		lu, err := s.LeaseUser(ctx, data.User(req.User), data.Tag{Namespace: req.Namespace, Name: req.Tag})
+		req := request.(putLeaseDistccRequest)
+		lu, err := s.LeaseDistcc(ctx, data.User(req.User), data.Tag{Namespace: req.Namespace, Name: req.Tag})
 		roundTimestamp(&lu.Expiration) // prevent the ugly Json timestamp with nanoseconds
-		return putLeaseUserResponse{lu, err}, nil
+		return putLeaseDistccResponse{lu, err}, nil
 	}
 }
 
-type putLeaseUserRequest struct {
+type putLeaseDistccRequest struct {
 	User      string
 	Namespace string
 	Tag       string
 }
 
-type putLeaseUserResponse struct {
+type putLeaseDistccResponse struct {
 	Lease Lease `json:"lease,omitempty"`
 	Err   error `json:"error,omitempty"`
 }
 
-func (r putLeaseUserResponse) error() error { return r.Err }
+func (r putLeaseDistccResponse) error() error { return r.Err }
 
 func roundTimestamp(t *time.Time) {
 	*t = t.Round(time.Second)

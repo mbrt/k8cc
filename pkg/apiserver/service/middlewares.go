@@ -27,12 +27,12 @@ type loggingMiddleware struct {
 	logger log.Logger
 }
 
-func (mw loggingMiddleware) LeaseUser(ctx context.Context, u data.User, t data.Tag) (r Lease, err error) {
+func (mw loggingMiddleware) LeaseDistcc(ctx context.Context, u data.User, t data.Tag) (r Lease, err error) {
 	defer func(begin time.Time) {
-		lerr := mw.logger.Log("method", "LeaseUser", "user", u, "tag", t, "took", time.Since(begin), "err", err)
+		lerr := mw.logger.Log("method", "LeaseDistcc", "user", u, "tag", t, "took", time.Since(begin), "err", err)
 		if err == nil {
 			err = lerr
 		}
 	}(time.Now())
-	return mw.next.LeaseUser(ctx, u, t)
+	return mw.next.LeaseDistcc(ctx, u, t)
 }

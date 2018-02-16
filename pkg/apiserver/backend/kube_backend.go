@@ -42,19 +42,22 @@ type kubeBackend struct {
 	logger        log.Logger
 }
 
-func (b *kubeBackend) LeaseDistcc(ctx context.Context, user data.User, tag data.Tag) (Host, error) {
+func (b *kubeBackend) LeaseDistcc(ctx context.Context, user data.User, tag data.Tag) (Lease, error) {
 	distcc, err := b.k8ccclientset.K8ccV1alpha1().Distccs(tag.Namespace).Get(tag.Name, metav1.GetOptions{})
 	if err != nil {
-		return "", errors.Wrap(err, "failed to get Distcc object")
+		return Lease{}, errors.Wrap(err, "failed to get Distcc object")
 	}
 	rchan := make(chan error)
+	defer close(rchan)
+
 	err = wait.ExponentialBackoff(backoff, func() (bool, error) {
 		go func() {
 			rchan <- b.renewDistccLease(ctx, user, distcc)
 		}()
 		select {
 		case <-ctx.Done():
-			_ = b.logger.Log("contenxt timed out")
+			_ = b.logger.Log("contenxt timed out, waiting last retry...")
+			<-rchan
 			return false, ErrCanceled
 		case rerr := <-rchan:
 			if rerr != nil {
@@ -64,10 +67,17 @@ func (b *kubeBackend) LeaseDistcc(ctx context.Context, user data.User, tag data.
 		}
 	})
 	host := fmt.Sprintf("%s.%s", distcc.Spec.ServiceName, tag.Namespace)
-	return Host(host), err
+	res := Lease{
+		Expiration: time.Now().Add(distcc.Spec.LeaseDuration.Duration),
+		Hosts:      []string{host},
+	}
+	return res, err
 }
 
 func (b *kubeBackend) renewDistccLease(ctx context.Context, user data.User, distcc *k8ccv1alpha1.Distcc) error {
+	// TODO use context when supported by client-go
+	// see https://github.com/kubernetes/community/pull/1166
+
 	// Try to get an existing claim
 	namespace := distcc.Namespace
 	claimName := makeClaimName(user, distcc.Name)

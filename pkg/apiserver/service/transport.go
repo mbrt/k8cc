@@ -26,10 +26,10 @@ func MakeHTTPHandler(s Service, logger log.Logger) http.Handler {
 		httptransport.ServerErrorEncoder(encodeError),
 	}
 
-	// PUT     /api/v1/tag/:namespce/:tag/lease/:user   gives the user a lease for the given time
-	r.Methods("PUT").Path("/api/v1/tag/{namespace}/{tag}/lease/{user}").Handler(httptransport.NewServer(
-		e.PutLeaseUserEndpoint,
-		decodePutLeaseUserRequest,
+	// PUT     /api/v1/distcc/:namespce/:tag/lease/:user   gives the user a lease for the given time
+	r.Methods("PUT").Path("/api/v1/distcc/{namespace}/{tag}/lease/{user}").Handler(httptransport.NewServer(
+		e.PutLeaseDistccEndpoint,
+		decodePutLeaseDistccRequest,
 		encodeResponse,
 		options...,
 	))
@@ -79,7 +79,7 @@ func codeFrom(err error) int {
 	}
 }
 
-func decodePutLeaseUserRequest(_ context.Context, r *http.Request) (request interface{}, err error) {
+func decodePutLeaseDistccRequest(_ context.Context, r *http.Request) (request interface{}, err error) {
 	vars := mux.Vars(r)
 	user, ok := vars["user"]
 	if !ok {
@@ -93,7 +93,7 @@ func decodePutLeaseUserRequest(_ context.Context, r *http.Request) (request inte
 	if !ok {
 		return nil, ErrBadRouting
 	}
-	return putLeaseUserRequest{
+	return putLeaseDistccRequest{
 		User:      user,
 		Namespace: ns,
 		Tag:       tag,
