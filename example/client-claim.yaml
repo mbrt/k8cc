@@ -7,3 +7,8 @@ metadata:
 spec:
   distccClientName: master
   userName: mike
+  secrets:
+    - name: ssh
+      volumeSource:
+        secretName: mike-ssh-key
+        defaultMode: 0755

@@ -15,7 +15,13 @@ spec:
         build-tag: master
     spec:
       containers:
-      - name: distcc
-        image: mbrt/distcc-client-ubuntu:latest
-        ports:
-        - containerPort: 22
+        - name: distcc
+          image: mbrt/distcc-client-ubuntu:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 22
+          volumeMounts:
+            - name: ssh
+              mountPath: /home/dev/.ssh
+              readOnly: true
+              mode: 0755

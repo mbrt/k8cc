@@ -5,5 +5,9 @@ RUN apt update                    && \
     apt clean                     && \
     rm -rf /var/cache/apt
 
+RUN mkdir /var/run/sshd                                                           && \
+    adduser --disabled-password --gecos "" dev                                    && \
+    sed -ri 's/^StrictModes\s+.*/StrictModes no/' /etc/ssh/sshd_config
+
 ENTRYPOINT ["/tini", "--"]
-CMD ["/usr/bin/sshd", "-D"]
+CMD ["/usr/sbin/sshd", "-D"]
