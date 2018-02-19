@@ -169,6 +169,21 @@ func (b *kubeBackend) renewDistccClientLease(ctx context.Context, user data.User
 	}
 
 	// Wait for the status to be updated
+	var service *corev1.Service
+	if service, err = b.getServiceForClaim(claim); err != nil {
+		return nil, err
+	}
+
+	res := ClientLease{
+		Expiration: time.Now().Add(client.Spec.LeaseDuration.Duration),
+		NodePort:   int(service.Spec.Ports[0].NodePort),
+	}
+
+	return &res, nil
+}
+
+func (b *kubeBackend) getServiceForClaim(claim *k8ccv1alpha1.DistccClientClaim) (*corev1.Service, error) {
+	// Wait for the status to be updated
 	if claim.Status.Service == nil {
 		return nil, k8ccerr.TransientError(errors.New("service for claim not present yet"))
 	}
@@ -184,12 +199,7 @@ func (b *kubeBackend) renewDistccClientLease(ctx context.Context, user data.User
 		return nil, k8ccerr.TransientError(errors.New("service for claim has no node port yet"))
 	}
 
-	res := ClientLease{
-		Expiration: time.Now().Add(client.Spec.LeaseDuration.Duration),
-		NodePort:   int(service.Spec.Ports[0].NodePort),
-	}
-
-	return &res, nil
+	return service, nil
 }
 
 type getterFunc func() (obj interface{}, err error)
