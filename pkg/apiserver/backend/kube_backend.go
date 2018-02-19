@@ -7,9 +7,11 @@ import (
 
 	"github.com/go-kit/kit/log"
 	"github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
 	kubeerr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
 
 	k8ccv1alpha1 "github.com/mbrt/k8cc/pkg/apis/k8cc.io/v1alpha1"
 	clientset "github.com/mbrt/k8cc/pkg/client/clientset/versioned"
@@ -27,18 +29,20 @@ var backoff = wait.Backoff{
 	Duration: 5 * time.Millisecond,
 	Factor:   2.0,
 	Jitter:   1.0,
-	Steps:    10,
+	Steps:    15,
 }
 
 // NewKubeBackend creates a backend that applies the configuration to a Kubernetes cluster
 func NewKubeBackend(sharedclient *controller.SharedClient, logger log.Logger) Backend {
 	return &kubeBackend{
+		kubeclientset: sharedclient.KubeClientset,
 		k8ccclientset: sharedclient.K8ccClientset,
 		logger:        logger,
 	}
 }
 
 type kubeBackend struct {
+	kubeclientset kubernetes.Interface
 	k8ccclientset clientset.Interface
 	logger        log.Logger
 }
@@ -74,6 +78,34 @@ func (b *kubeBackend) LeaseDistcc(ctx context.Context, user data.User, tag data.
 	return res, err
 }
 
+func (b *kubeBackend) LeaseClient(ctx context.Context, user data.User, tag data.Tag) (Lease, error) {
+	rchan := make(chan error)
+	defer close(rchan)
+
+	obj, err := getWithRetry(ctx, rchan, b.logger, func() (interface{}, error) {
+		dc, err := b.k8ccclientset.K8ccV1alpha1().DistccClients(tag.Namespace).Get(tag.Name, metav1.GetOptions{})
+		// No retries in case the distcc object is not there,
+		// probably the tag was wrong
+		if kubeerr.IsNotFound(err) {
+			return nil, err
+		}
+		return dc, k8ccerr.TransientError(err)
+	})
+	if err != nil {
+		return Lease{}, errors.Wrap(err, "failed to get DistccClient object")
+	}
+	client := obj.(*k8ccv1alpha1.DistccClient)
+
+	res, err := getWithRetry(ctx, rchan, b.logger, func() (interface{}, error) {
+		return b.renewDistccClientLease(ctx, user, client)
+	})
+	if err != nil {
+		return Lease{}, err
+	}
+
+	return *res.(*Lease), err
+}
+
 func (b *kubeBackend) renewDistccLease(ctx context.Context, user data.User, distcc *k8ccv1alpha1.Distcc) error {
 	// TODO use context when supported by client-go
 	// see https://github.com/kubernetes/community/pull/1166
@@ -98,6 +130,59 @@ func (b *kubeBackend) renewDistccLease(ctx context.Context, user data.User, dist
 	}
 
 	return k8ccerr.TransientError(errors.Wrap(err, "update claim failed"))
+}
+
+func (b *kubeBackend) renewDistccClientLease(ctx context.Context, user data.User, client *k8ccv1alpha1.DistccClient) (*Lease, error) {
+	// TODO use context when supported by client-go
+	// see https://github.com/kubernetes/community/pull/1166
+
+	// Try to get an existing claim
+	namespace := client.Namespace
+	claimName := makeClaimName(user, client.Name)
+	claim, err := b.k8ccclientset.K8ccV1alpha1().DistccClientClaims(namespace).Get(claimName, metav1.GetOptions{})
+	if kubeerr.IsNotFound(err) {
+		// It was not present: create it
+
+		// Try to get a corresponding secret for the user
+		secretName := fmt.Sprintf("%s-ssh-key", user)
+		_, err = b.kubeclientset.CoreV1().Secrets(namespace).Get(secretName, metav1.GetOptions{})
+		if err != nil {
+			if !kubeerr.IsNotFound(err) {
+				return nil, k8ccerr.TransientError(errors.Wrap(err, "get secret failed"))
+			}
+			// No secrets for the user: fine, we just don't use secrets
+			secretName = ""
+		}
+
+		// Create the claim at this point
+		new := newDistccClientClaim(user, client, secretName)
+		claim, err = b.k8ccclientset.K8ccV1alpha1().DistccClientClaims(namespace).Create(new)
+	}
+
+	// Ask for a lease renew if necessary
+	if claim.Status.ExpirationTime != nil {
+		claim.Status.ExpirationTime = nil
+		_, err = b.k8ccclientset.K8ccV1alpha1().DistccClientClaims(namespace).Update(claim)
+	}
+	if err != nil {
+		return nil, k8ccerr.TransientError(errors.Wrap(err, "update claim failed"))
+	}
+
+	// Wait for the status to be updated
+	if claim.Status.Service == nil {
+		return nil, k8ccerr.TransientError(errors.New("service for claim not present yet"))
+	}
+	if claim.Status.Deployment == nil {
+		return nil, k8ccerr.TransientError(errors.New("deploy for claim not present yet"))
+	}
+
+	host := fmt.Sprintf("%s.%s", claim.Status.Service.Name, namespace)
+	res := Lease{
+		Expiration: time.Now().Add(client.Spec.LeaseDuration.Duration),
+		Endpoints:  []string{host},
+	}
+
+	return &res, nil
 }
 
 type getterFunc func() (obj interface{}, err error)
@@ -146,6 +231,48 @@ func newDistccClaim(user data.User, distcc *k8ccv1alpha1.Distcc) *k8ccv1alpha1.D
 			UserName:   string(user),
 		},
 	}
+}
+
+func newDistccClientClaim(
+	user data.User,
+	client *k8ccv1alpha1.DistccClient,
+	secretName string,
+) *k8ccv1alpha1.DistccClientClaim {
+
+	toPtr := func(i int) *int32 {
+		r := int32(i)
+		return &r
+	}
+
+	res := &k8ccv1alpha1.DistccClientClaim{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "k8cc.io/v1alpha1",
+			Kind:       "DistccClaim",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      makeClaimName(user, client.Name),
+			Namespace: client.Namespace,
+			Labels:    client.Labels,
+		},
+		Spec: k8ccv1alpha1.DistccClientClaimSpec{
+			DistccClientName: client.Name,
+			UserName:         string(user),
+		},
+	}
+
+	if len(secretName) > 0 {
+		res.Spec.Secrets = []k8ccv1alpha1.Secret{
+			{
+				Name: "ssh",
+				VolumeSource: corev1.SecretVolumeSource{
+					SecretName:  secretName,
+					DefaultMode: toPtr(0755),
+				},
+			},
+		}
+	}
+
+	return res
 }
 
 func makeClaimName(u data.User, resourceName string) string {

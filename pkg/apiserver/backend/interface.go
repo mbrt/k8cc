@@ -26,4 +26,5 @@ type Lease struct {
 // It is used to separate the api server frontend from the actual logic.
 type Backend interface {
 	LeaseDistcc(ctx context.Context, u data.User, t data.Tag) (Lease, error)
+	LeaseClient(ctx context.Context, u data.User, t data.Tag) (Lease, error)
 }

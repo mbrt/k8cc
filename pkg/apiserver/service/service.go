@@ -16,6 +16,7 @@ var (
 // Service is an interface that implements all the APIs.
 type Service interface {
 	LeaseDistcc(ctx context.Context, u data.User, t data.Tag) (Lease, error)
+	LeaseClient(ctx context.Context, u data.User, t data.Tag) (Lease, error)
 }
 
 // NewService creates the API service
@@ -27,7 +28,7 @@ func NewService(b backend.Backend) Service {
 type Lease struct {
 	Expiration time.Time `json:"expiration"`
 	Endpoints  []string  `json:"endpoints"`
-	Replicas   int       `json:"replicas"`
+	Replicas   int       `json:"replicas,omitempty"`
 }
 
 type service struct {
@@ -46,6 +47,16 @@ func (s service) LeaseDistcc(ctx context.Context, u data.User, t data.Tag) (Leas
 	}
 	return result, err
 }
+
+func (s service) LeaseClient(ctx context.Context, u data.User, t data.Tag) (Lease, error) {
+	lease, err := s.backend.LeaseClient(ctx, u, t)
+	if err != nil {
+		return Lease{}, err
+	}
+	result := Lease{
+		Expiration: lease.Expiration,
+		Endpoints:  lease.Endpoints,
+		Replicas:   lease.Replicas,
 	}
 	return result, err
 }
