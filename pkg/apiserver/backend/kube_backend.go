@@ -47,7 +47,7 @@ type kubeBackend struct {
 	logger        log.Logger
 }
 
-func (b *kubeBackend) LeaseDistcc(ctx context.Context, user data.User, tag data.Tag) (Lease, error) {
+func (b *kubeBackend) LeaseDistcc(ctx context.Context, user data.User, tag data.Tag) (DistccLease, error) {
 	rchan := make(chan error)
 	defer close(rchan)
 
@@ -61,7 +61,7 @@ func (b *kubeBackend) LeaseDistcc(ctx context.Context, user data.User, tag data.
 		return d, k8ccerr.TransientError(err)
 	})
 	if err != nil {
-		return Lease{}, errors.Wrap(err, "failed to get Distcc object")
+		return DistccLease{}, errors.Wrap(err, "failed to get Distcc object")
 	}
 	distcc := obj.(*k8ccv1alpha1.Distcc)
 
@@ -70,7 +70,7 @@ func (b *kubeBackend) LeaseDistcc(ctx context.Context, user data.User, tag data.
 	})
 
 	host := fmt.Sprintf("%s.%s", distcc.Spec.ServiceName, tag.Namespace)
-	res := Lease{
+	res := DistccLease{
 		Expiration: time.Now().Add(distcc.Spec.LeaseDuration.Duration),
 		Endpoints:  []string{host},
 		Replicas:   int(distcc.Spec.UserReplicas),
@@ -78,7 +78,7 @@ func (b *kubeBackend) LeaseDistcc(ctx context.Context, user data.User, tag data.
 	return res, err
 }
 
-func (b *kubeBackend) LeaseClient(ctx context.Context, user data.User, tag data.Tag) (Lease, error) {
+func (b *kubeBackend) LeaseClient(ctx context.Context, user data.User, tag data.Tag) (ClientLease, error) {
 	rchan := make(chan error)
 	defer close(rchan)
 
@@ -92,7 +92,7 @@ func (b *kubeBackend) LeaseClient(ctx context.Context, user data.User, tag data.
 		return dc, k8ccerr.TransientError(err)
 	})
 	if err != nil {
-		return Lease{}, errors.Wrap(err, "failed to get DistccClient object")
+		return ClientLease{}, errors.Wrap(err, "failed to get DistccClient object")
 	}
 	client := obj.(*k8ccv1alpha1.DistccClient)
 
@@ -100,10 +100,10 @@ func (b *kubeBackend) LeaseClient(ctx context.Context, user data.User, tag data.
 		return b.renewDistccClientLease(ctx, user, client)
 	})
 	if err != nil {
-		return Lease{}, err
+		return ClientLease{}, err
 	}
 
-	return *res.(*Lease), err
+	return *res.(*ClientLease), err
 }
 
 func (b *kubeBackend) renewDistccLease(ctx context.Context, user data.User, distcc *k8ccv1alpha1.Distcc) error {
@@ -132,7 +132,7 @@ func (b *kubeBackend) renewDistccLease(ctx context.Context, user data.User, dist
 	return k8ccerr.TransientError(errors.Wrap(err, "update claim failed"))
 }
 
-func (b *kubeBackend) renewDistccClientLease(ctx context.Context, user data.User, client *k8ccv1alpha1.DistccClient) (*Lease, error) {
+func (b *kubeBackend) renewDistccClientLease(ctx context.Context, user data.User, client *k8ccv1alpha1.DistccClient) (*ClientLease, error) {
 	// TODO use context when supported by client-go
 	// see https://github.com/kubernetes/community/pull/1166
 
@@ -176,10 +176,17 @@ func (b *kubeBackend) renewDistccClientLease(ctx context.Context, user data.User
 		return nil, k8ccerr.TransientError(errors.New("deploy for claim not present yet"))
 	}
 
-	host := fmt.Sprintf("%s.%s", claim.Status.Service.Name, namespace)
-	res := Lease{
+	service, err := b.kubeclientset.CoreV1().Services(claim.Namespace).Get(claim.Status.Service.Name, metav1.GetOptions{})
+	if err != nil {
+		return nil, k8ccerr.TransientError(errors.New("service for claim not present yet"))
+	}
+	if len(service.Spec.Ports) == 0 || service.Spec.Ports[0].NodePort == 0 {
+		return nil, k8ccerr.TransientError(errors.New("service for claim has no node port yet"))
+	}
+
+	res := ClientLease{
 		Expiration: time.Now().Add(client.Spec.LeaseDuration.Duration),
-		Endpoints:  []string{host},
+		NodePort:   int(service.Spec.Ports[0].NodePort),
 	}
 
 	return &res, nil

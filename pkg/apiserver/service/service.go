@@ -27,7 +27,8 @@ func NewService(b backend.Backend) Service {
 // Lease contains info about a lease for a specific user and tag
 type Lease struct {
 	Expiration time.Time `json:"expiration"`
-	Endpoints  []string  `json:"endpoints"`
+	Endpoints  []string  `json:"endpoints,omitempty"`
+	NodePort   int       `json:"nodePort,omitempty"`
 	Replicas   int       `json:"replicas,omitempty"`
 }
 
@@ -55,8 +56,7 @@ func (s service) LeaseClient(ctx context.Context, u data.User, t data.Tag) (Leas
 	}
 	result := Lease{
 		Expiration: lease.Expiration,
-		Endpoints:  lease.Endpoints,
-		Replicas:   lease.Replicas,
+		NodePort:   lease.NodePort,
 	}
 	return result, err
 }
