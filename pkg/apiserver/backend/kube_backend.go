@@ -68,7 +68,8 @@ func (b *kubeBackend) LeaseDistcc(ctx context.Context, user data.User, tag data.
 	host := fmt.Sprintf("%s.%s", distcc.Spec.ServiceName, tag.Namespace)
 	res := Lease{
 		Expiration: time.Now().Add(distcc.Spec.LeaseDuration.Duration),
-		Hosts:      []string{host},
+		Endpoints:  []string{host},
+		Replicas:   int(distcc.Spec.UserReplicas),
 	}
 	return res, err
 }

@@ -26,7 +26,8 @@ func NewService(b backend.Backend) Service {
 // Lease contains info about a lease for a specific user and tag
 type Lease struct {
 	Expiration time.Time `json:"expiration"`
-	Hosts      []string  `json:"hosts"`
+	Endpoints  []string  `json:"endpoints"`
+	Replicas   int       `json:"replicas"`
 }
 
 type service struct {
@@ -40,7 +41,11 @@ func (s service) LeaseDistcc(ctx context.Context, u data.User, t data.Tag) (Leas
 	}
 	result := Lease{
 		Expiration: lease.Expiration,
-		Hosts:      lease.Hosts,
+		Endpoints:  lease.Endpoints,
+		Replicas:   lease.Replicas,
+	}
+	return result, err
+}
 	}
 	return result, err
 }
