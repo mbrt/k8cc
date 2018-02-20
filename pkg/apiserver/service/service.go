@@ -11,11 +11,14 @@ import (
 var (
 	// ErrCanceled is used when the request cannot be satisfied on time
 	ErrCanceled = backend.ErrCanceled
+	// ErrNotFound is used when the given resource was not found
+	ErrNotFound = backend.ErrNotFound
 )
 
 // Service is an interface that implements all the APIs.
 type Service interface {
 	LeaseDistcc(ctx context.Context, u data.User, t data.Tag) (Lease, error)
+	DeleteDistcc(ctx context.Context, u data.User, t data.Tag) error
 	LeaseClient(ctx context.Context, u data.User, t data.Tag) (Lease, error)
 }
 
@@ -47,6 +50,10 @@ func (s service) LeaseDistcc(ctx context.Context, u data.User, t data.Tag) (Leas
 		Replicas:   lease.Replicas,
 	}
 	return result, err
+}
+
+func (s service) DeleteDistcc(ctx context.Context, u data.User, t data.Tag) error {
+	return s.backend.DeleteDistcc(ctx, u, t)
 }
 
 func (s service) LeaseClient(ctx context.Context, u data.User, t data.Tag) (Lease, error) {

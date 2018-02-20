@@ -23,6 +23,8 @@ import (
 var (
 	// ErrCanceled is used when the request cannot be satisfied on time
 	ErrCanceled = errors.New("timeout or canceled")
+	// ErrNotFound is used when the given resource was not found
+	ErrNotFound = errors.New("resource not found")
 )
 
 var backoff = wait.Backoff{
@@ -76,6 +78,23 @@ func (b *kubeBackend) LeaseDistcc(ctx context.Context, user data.User, tag data.
 		Replicas:   int(distcc.Spec.UserReplicas),
 	}
 	return res, err
+}
+
+func (b *kubeBackend) DeleteDistcc(ctx context.Context, user data.User, tag data.Tag) error {
+	rchan := make(chan error)
+	defer close(rchan)
+
+	_, err := getWithRetry(ctx, rchan, b.logger, func() (interface{}, error) {
+		claimName := makeClaimName(user, tag.Name)
+		// Try to delete the resource if present, otherwise 404
+		err := b.k8ccclientset.K8ccV1alpha1().DistccClaims(tag.Namespace).Delete(claimName, nil)
+		if kubeerr.IsNotFound(err) {
+			return nil, ErrNotFound
+		}
+		return nil, k8ccerr.TransientError(err)
+	})
+
+	return err
 }
 
 func (b *kubeBackend) LeaseClient(ctx context.Context, user data.User, tag data.Tag) (ClientLease, error) {

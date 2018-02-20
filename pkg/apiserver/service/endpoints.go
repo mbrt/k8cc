@@ -11,64 +11,70 @@ import (
 
 // Endpoints collects all the api endpoints in a single struct
 type Endpoints struct {
-	PutLeaseDistccEndpoint endpoint.Endpoint
-	PutLeaseClientEndpoint endpoint.Endpoint
+	PutLeaseDistccEndpoint    endpoint.Endpoint
+	DeleteLeaseDistccEndpoint endpoint.Endpoint
+	PutLeaseClientEndpoint    endpoint.Endpoint
 }
 
 // MakeEndpoints creates the api endpoints, wiring in the given service
 func MakeEndpoints(s Service) Endpoints {
 	return Endpoints{
-		PutLeaseDistccEndpoint: MakePutLeaseDistccEndpoint(s),
-		PutLeaseClientEndpoint: MakePutLeaseClientEndpoint(s),
+		PutLeaseDistccEndpoint:    MakePutLeaseDistccEndpoint(s),
+		DeleteLeaseDistccEndpoint: MakeDeleteLeaseDistccEndpoint(s),
+		PutLeaseClientEndpoint:    MakePutLeaseClientEndpoint(s),
 	}
 }
 
 // MakePutLeaseDistccEndpoint creates an endpoint for the LeaseDistcc service
 func MakePutLeaseDistccEndpoint(s Service) endpoint.Endpoint {
 	return func(ctx context.Context, request interface{}) (response interface{}, err error) {
-		req := request.(putLeaseDistccRequest)
+		req := request.(leaseRequest)
 		lu, err := s.LeaseDistcc(ctx, data.User(req.User), data.Tag{Namespace: req.Namespace, Name: req.Tag})
-		roundTimestamp(&lu.Expiration) // prevent the ugly Json timestamp with nanoseconds
-		return putLeaseDistccResponse{lu, err}, nil
+		return newLeaseResponse(lu, err), nil
+	}
+}
+
+// MakeDeleteLeaseDistccEndpoint creates an endpoint for the DeleteDistcc service
+func MakeDeleteLeaseDistccEndpoint(s Service) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (response interface{}, err error) {
+		req := request.(leaseRequest)
+		err = s.DeleteDistcc(ctx, data.User(req.User), data.Tag{Namespace: req.Namespace, Name: req.Tag})
+		return err, nil
 	}
 }
 
 // MakePutLeaseClientEndpoint creates an endpoint for the LeaseDistccClient service
 func MakePutLeaseClientEndpoint(s Service) endpoint.Endpoint {
 	return func(ctx context.Context, request interface{}) (response interface{}, err error) {
-		req := request.(putLeaseClientRequest)
+		req := request.(leaseRequest)
 		lu, err := s.LeaseClient(ctx, data.User(req.User), data.Tag{Namespace: req.Namespace, Name: req.Tag})
-		roundTimestamp(&lu.Expiration) // prevent the ugly Json timestamp with nanoseconds
-		return putLeaseClientResponse{lu, err}, nil
+		return newLeaseResponse(lu, err), nil
 	}
 }
 
-type putLeaseDistccRequest struct {
+type leaseRequest struct {
 	User      string
 	Namespace string
 	Tag       string
 }
 
-type putLeaseDistccResponse struct {
+type leaseResponse struct {
 	Lease Lease `json:"lease,omitempty"`
 	Err   error `json:"error,omitempty"`
 }
 
-func (r putLeaseDistccResponse) error() error { return r.Err }
+func (r leaseResponse) error() error { return r.Err }
 
-type putLeaseClientRequest struct {
-	User      string
-	Namespace string
-	Tag       string
+func newLeaseResponse(lease Lease, err error) leaseResponse {
+	res := leaseResponse{
+		Lease: lease,
+		Err:   err,
+	}
+	// prevent the ugly Json timestamp with nanoseconds
+	res.Lease.Expiration = roundTimestamp(lease.Expiration)
+	return res
 }
 
-type putLeaseClientResponse struct {
-	Lease Lease `json:"lease,omitempty"`
-	Err   error `json:"error,omitempty"`
-}
-
-func (r putLeaseClientResponse) error() error { return r.Err }
-
-func roundTimestamp(t *time.Time) {
-	*t = t.Round(time.Second)
+func roundTimestamp(t time.Time) time.Time {
+	return t.Round(time.Second)
 }
