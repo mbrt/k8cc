@@ -56,3 +56,13 @@ func (mw loggingMiddleware) LeaseClient(ctx context.Context, u data.User, t data
 	}(time.Now())
 	return mw.next.LeaseClient(ctx, u, t)
 }
+
+func (mw loggingMiddleware) DeleteClient(ctx context.Context, u data.User, t data.Tag) (err error) {
+	defer func(begin time.Time) {
+		lerr := mw.logger.Log("method", "DeleteClient", "user", u, "tag", t, "took", time.Since(begin), "err", err)
+		if err == nil {
+			err = lerr
+		}
+	}(time.Now())
+	return mw.next.DeleteClient(ctx, u, t)
+}

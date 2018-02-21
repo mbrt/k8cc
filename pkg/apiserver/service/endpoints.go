@@ -14,6 +14,7 @@ type Endpoints struct {
 	PutLeaseDistccEndpoint    endpoint.Endpoint
 	DeleteLeaseDistccEndpoint endpoint.Endpoint
 	PutLeaseClientEndpoint    endpoint.Endpoint
+	DeleteLeaseClientEndpoint endpoint.Endpoint
 }
 
 // MakeEndpoints creates the api endpoints, wiring in the given service
@@ -22,6 +23,7 @@ func MakeEndpoints(s Service) Endpoints {
 		PutLeaseDistccEndpoint:    MakePutLeaseDistccEndpoint(s),
 		DeleteLeaseDistccEndpoint: MakeDeleteLeaseDistccEndpoint(s),
 		PutLeaseClientEndpoint:    MakePutLeaseClientEndpoint(s),
+		DeleteLeaseClientEndpoint: MakeDeleteLeaseClientEndpoint(s),
 	}
 }
 
@@ -49,6 +51,15 @@ func MakePutLeaseClientEndpoint(s Service) endpoint.Endpoint {
 		req := request.(leaseRequest)
 		lu, err := s.LeaseClient(ctx, data.User(req.User), data.Tag{Namespace: req.Namespace, Name: req.Tag})
 		return newLeaseResponse(lu, err), nil
+	}
+}
+
+// MakeDeleteLeaseClientEndpoint creates an endpoint for the DeleteClient service
+func MakeDeleteLeaseClientEndpoint(s Service) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (response interface{}, err error) {
+		req := request.(leaseRequest)
+		err = s.DeleteClient(ctx, data.User(req.User), data.Tag{Namespace: req.Namespace, Name: req.Tag})
+		return newDeleteLeaseResponse(err), nil
 	}
 }
 

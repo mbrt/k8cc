@@ -20,6 +20,7 @@ type Service interface {
 	LeaseDistcc(ctx context.Context, u data.User, t data.Tag) (Lease, error)
 	DeleteDistcc(ctx context.Context, u data.User, t data.Tag) error
 	LeaseClient(ctx context.Context, u data.User, t data.Tag) (Lease, error)
+	DeleteClient(ctx context.Context, u data.User, t data.Tag) error
 }
 
 // NewService creates the API service
@@ -66,4 +67,8 @@ func (s service) LeaseClient(ctx context.Context, u data.User, t data.Tag) (Leas
 		NodePort:   lease.NodePort,
 	}
 	return result, err
+}
+
+func (s service) DeleteClient(ctx context.Context, u data.User, t data.Tag) error {
+	return s.backend.DeleteClient(ctx, u, t)
 }

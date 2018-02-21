@@ -125,6 +125,23 @@ func (b *kubeBackend) LeaseClient(ctx context.Context, user data.User, tag data.
 	return *res.(*ClientLease), err
 }
 
+func (b *kubeBackend) DeleteClient(ctx context.Context, user data.User, tag data.Tag) error {
+	rchan := make(chan error)
+	defer close(rchan)
+
+	_, err := getWithRetry(ctx, rchan, b.logger, func() (interface{}, error) {
+		claimName := makeClaimName(user, tag.Name)
+		// Try to delete the resource if present, otherwise 404
+		err := b.k8ccclientset.K8ccV1alpha1().DistccClientClaims(tag.Namespace).Delete(claimName, nil)
+		if kubeerr.IsNotFound(err) {
+			return nil, ErrNotFound
+		}
+		return nil, k8ccerr.TransientError(err)
+	})
+
+	return err
+}
+
 func (b *kubeBackend) renewDistccLease(ctx context.Context, user data.User, distcc *k8ccv1alpha1.Distcc) error {
 	// TODO use context when supported by client-go
 	// see https://github.com/kubernetes/community/pull/1166

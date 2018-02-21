@@ -49,6 +49,12 @@ func MakeHTTPHandler(s Service, logger log.Logger) http.Handler {
 		encodeResponse,
 		options...,
 	))
+	r.Methods("DELETE").Path("/api/v1/client/{namespace}/{tag}/lease/{user}").Handler(httptransport.NewServer(
+		e.DeleteLeaseClientEndpoint,
+		decodeLeaseRequest,
+		encodeResponse,
+		options...,
+	))
 
 	return r
 }

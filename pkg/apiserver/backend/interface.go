@@ -39,4 +39,5 @@ type Backend interface {
 	LeaseDistcc(ctx context.Context, u data.User, t data.Tag) (DistccLease, error)
 	DeleteDistcc(ctx context.Context, u data.User, t data.Tag) error
 	LeaseClient(ctx context.Context, u data.User, t data.Tag) (ClientLease, error)
+	DeleteClient(ctx context.Context, u data.User, t data.Tag) error
 }
