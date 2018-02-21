@@ -31,7 +31,7 @@ var backoff = wait.Backoff{
 	Duration: 5 * time.Millisecond,
 	Factor:   2.0,
 	Jitter:   1.0,
-	Steps:    15,
+	Steps:    12,
 }
 
 // NewKubeBackend creates a backend that applies the configuration to a Kubernetes cluster
