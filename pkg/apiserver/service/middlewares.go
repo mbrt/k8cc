@@ -27,7 +27,7 @@ type loggingMiddleware struct {
 	logger log.Logger
 }
 
-func (mw loggingMiddleware) LeaseDistcc(ctx context.Context, u data.User, t data.Tag) (r Lease, err error) {
+func (mw loggingMiddleware) LeaseDistcc(ctx context.Context, u data.User, t data.Tag) (r DistccLease, err error) {
 	defer func(begin time.Time) {
 		lerr := mw.logger.Log("method", "LeaseDistcc", "user", u, "tag", t, "took", time.Since(begin), "err", err)
 		if err == nil {
@@ -47,7 +47,7 @@ func (mw loggingMiddleware) DeleteDistcc(ctx context.Context, u data.User, t dat
 	return mw.next.DeleteDistcc(ctx, u, t)
 }
 
-func (mw loggingMiddleware) LeaseClient(ctx context.Context, u data.User, t data.Tag) (r Lease, err error) {
+func (mw loggingMiddleware) LeaseClient(ctx context.Context, u data.User, t data.Tag) (r ClientLease, err error) {
 	defer func(begin time.Time) {
 		lerr := mw.logger.Log("method", "LeaseClient", "user", u, "tag", t, "took", time.Since(begin), "err", err)
 		if err == nil {

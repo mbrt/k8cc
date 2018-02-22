@@ -32,7 +32,7 @@ func MakePutLeaseDistccEndpoint(s Service) endpoint.Endpoint {
 	return func(ctx context.Context, request interface{}) (response interface{}, err error) {
 		req := request.(leaseRequest)
 		lu, err := s.LeaseDistcc(ctx, data.User(req.User), data.Tag{Namespace: req.Namespace, Name: req.Tag})
-		return newLeaseResponse(lu, err), nil
+		return newLeaseDistccResponse(lu, err), nil
 	}
 }
 
@@ -50,7 +50,7 @@ func MakePutLeaseClientEndpoint(s Service) endpoint.Endpoint {
 	return func(ctx context.Context, request interface{}) (response interface{}, err error) {
 		req := request.(leaseRequest)
 		lu, err := s.LeaseClient(ctx, data.User(req.User), data.Tag{Namespace: req.Namespace, Name: req.Tag})
-		return newLeaseResponse(lu, err), nil
+		return newLeaseClientResponse(lu, err), nil
 	}
 }
 
@@ -84,15 +84,32 @@ type leaseRequest struct {
 	Tag       string
 }
 
-type leaseResponse struct {
-	Lease Lease `json:"lease,omitempty"`
-	Err   error `json:"error,omitempty"`
+type leaseDistccResponse struct {
+	Lease DistccLease `json:"lease,omitempty"`
+	Err   error       `json:"error,omitempty"`
 }
 
-func (r leaseResponse) error() error { return r.Err }
+func (r leaseDistccResponse) error() error { return r.Err }
 
-func newLeaseResponse(lease Lease, err error) leaseResponse {
-	res := leaseResponse{
+func newLeaseDistccResponse(lease DistccLease, err error) leaseDistccResponse {
+	res := leaseDistccResponse{
+		Lease: lease,
+		Err:   err,
+	}
+	// prevent the ugly Json timestamp with nanoseconds
+	res.Lease.Expiration = roundTimestamp(lease.Expiration)
+	return res
+}
+
+type leaseClientResponse struct {
+	Lease ClientLease `json:"lease,omitempty"`
+	Err   error       `json:"error,omitempty"`
+}
+
+func (r leaseClientResponse) error() error { return r.Err }
+
+func newLeaseClientResponse(lease ClientLease, err error) leaseClientResponse {
+	res := leaseClientResponse{
 		Lease: lease,
 		Err:   err,
 	}

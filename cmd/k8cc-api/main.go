@@ -10,7 +10,6 @@ import (
 
 	"github.com/go-kit/kit/log"
 
-	apibackend "github.com/mbrt/k8cc/pkg/apiserver/backend"
 	"github.com/mbrt/k8cc/pkg/apiserver/service"
 	"github.com/mbrt/k8cc/pkg/controller"
 )
@@ -37,11 +36,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	backend := apibackend.NewKubeBackend(sharedClient, log.With(logger, "component", "Backend"))
-
 	var s service.Service
 	{
-		s = service.NewService(backend)
+		s = service.NewService(sharedClient, log.With(logger, "component", "Service"))
 		s = service.LoggingMiddleware(logger)(s)
 	}
 
