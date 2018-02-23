@@ -283,11 +283,13 @@ func getWithRetry(ctx context.Context, rchan chan error, logger log.Logger, gett
 		}()
 		select {
 		case <-ctx.Done():
+			/* #nosec */
 			_ = logger.Log("context timed out, waiting for last retry...")
 			<-rchan
 			return false, ErrCanceled
 		case rerr := <-rchan:
 			if rerr != nil {
+				/* #nosec */
 				_ = logger.Log("err", rerr)
 				// If the error is transient we want to retry, but if not we return immediately
 				if !k8ccerr.IsTransient(rerr) {
