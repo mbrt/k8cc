@@ -308,10 +308,6 @@ func getWithRetry(ctx context.Context, rchan chan error, logger log.Logger, gett
 
 func newDistccClaim(user data.User, distcc *k8ccv1alpha1.Distcc) *k8ccv1alpha1.DistccClaim {
 	return &k8ccv1alpha1.DistccClaim{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "k8cc.io/v1alpha1",
-			Kind:       "DistccClaim",
-		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      makeClaimName(user, distcc.Name),
 			Namespace: distcc.Namespace,
@@ -336,10 +332,6 @@ func newDistccClientClaim(
 	}
 
 	res := &k8ccv1alpha1.DistccClientClaim{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "k8cc.io/v1alpha1",
-			Kind:       "DistccClaim",
-		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      makeClaimName(user, client.Name),
 			Namespace: client.Namespace,
