@@ -16,54 +16,58 @@ kind: ClusterRole
 metadata:
   name: k8cc-controller
 rules:
+- apiGroups: [""]
+  resources:
+  - services
+  verbs: ["create", "get", "list"]
 - apiGroups:
   - apps
   resources:
-  - statefulsets
-  verbs: ["get", "update", "list"]
-- apiGroups: [""]
+  - deployments
+  verbs: ["create", "get", "list"]
+- apiGroups:
+  - k8cc.io
   resources:
-  - pods
-  verbs: ["list"]
+  - distccs
+  - distccclients
+  verbs: ["get", "list", "update"]
+- apiGroups:
+  - k8cc.io
+  resources:
+  - distccclaims
+  - distccclientclaims
+  verbs: ["delete", "get", "list", "update"]
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: k8cc-controller
 ---
-apiVersion: v1
-kind: Service
-metadata:
-  name: k8cc-api
-  labels:
-    app: k8cc
-    tier: frontend
-spec:
-  ports:
-  - port: 80
-  selector:
-    app: k8cc
-    tier: frontend
----
-apiVersion: apps/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: k8cc-api
+  name: k8cc-controller
+  labels:
+    app: k8cc
+    tier: controller
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      app: k8cc
+      tier: controller
   template:
     metadata:
       labels:
         app: k8cc
-        tier: frontend
+        tier: controller
     spec:
       containers:
       - name: k8cc-controller
-        image: TODO
+        image: mbrt/k8cc-controller:latest
+        imagePullPolicy: Always
         resources:
           requests:
             cpu: 100m
             memory: 100Mi
-        ports:
-        - containerPort: 80
       serviceAccountName: k8cc-controller

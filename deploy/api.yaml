@@ -1,0 +1,85 @@
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: k8cc-api
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: k8cc-api
+subjects:
+- kind: ServiceAccount
+  name: k8cc-api
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  name: k8cc-api
+rules:
+- apiGroups: [""]
+  resources:
+  - services
+  verbs: ["get"]
+- apiGroups:
+  - k8cc.io
+  resources:
+  - distccs
+  - distccclients
+  verbs: ["get"]
+- apiGroups:
+  - k8cc.io
+  resources:
+  - distccclaims
+  - distccclientclaims
+  verbs: ["delete", "create", "get", "update"]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: k8cc-api
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: k8cc-api
+  labels:
+    app: k8cc
+    tier: api
+spec:
+  ports:
+  - port: 80
+    targetPort: 8080
+  selector:
+    app: k8cc
+    tier: api
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k8cc-api
+  labels:
+    app: k8cc
+    tier: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: k8cc
+      tier: api
+  template:
+    metadata:
+      labels:
+        app: k8cc
+        tier: api
+    spec:
+      containers:
+      - name: k8cc-api
+        image: mbrt/k8cc-api:latest
+        imagePullPolicy: Always
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+        ports:
+        - containerPort: 8080
+      serviceAccountName: k8cc-api

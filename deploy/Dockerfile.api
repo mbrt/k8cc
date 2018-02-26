@@ -1,0 +1,9 @@
+FROM golang:latest as builder
+
+WORKDIR /go/src/github.com/mbrt/k8cc
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build ./cmd/k8cc-api
+
+FROM scratch
+COPY --from=builder /go/src/github.com/mbrt/k8cc/k8cc-api /k8cc-api
+CMD ["/k8cc-api", "-logtostderr=true"]
