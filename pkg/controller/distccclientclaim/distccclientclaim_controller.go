@@ -6,7 +6,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	appsv1beta2 "k8s.io/api/apps/v1beta2"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	kubeerr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -14,7 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
-	appslisters "k8s.io/client-go/listers/apps/v1beta2"
+	appslisters "k8s.io/client-go/listers/apps/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 
@@ -50,7 +50,7 @@ const (
 
 // NewController creates a new Controller
 func NewController(sharedClient *sharedctr.SharedClient) sharedctr.Controller {
-	deployInformer := sharedClient.KubeInformerFactory.Apps().V1beta2().Deployments()
+	deployInformer := sharedClient.KubeInformerFactory.Apps().V1().Deployments()
 	serviceInformer := sharedClient.KubeInformerFactory.Core().V1().Services()
 	clientInformer := sharedClient.DistccInformerFactory.K8cc().V1alpha1().DistccClients()
 	claimInformer := sharedClient.DistccInformerFactory.K8cc().V1alpha1().DistccClientClaims()
@@ -177,14 +177,14 @@ func (c *controller) syncDeploy(claim *k8ccv1alpha1.DistccClientClaim, client *k
 		return false, err
 	}
 
-	var deploy *appsv1beta2.Deployment
+	var deploy *appsv1.Deployment
 	if obj != nil {
-		deploy = obj.(*appsv1beta2.Deployment)
+		deploy = obj.(*appsv1.Deployment)
 	} else {
 		// No way to get a deployment: need to create a new one
 		var err error
 		new := newDeploy(claim, client)
-		deploy, err = c.kubeclientset.AppsV1beta2().Deployments(claim.Namespace).Create(new)
+		deploy, err = c.kubeclientset.AppsV1().Deployments(claim.Namespace).Create(new)
 		// If an error occurs during Get/Create, we'll requeue the item so we can
 		// attempt processing again later. This could have been caused by a
 		// temporary network failure, or any other transient reason.
@@ -301,7 +301,7 @@ func (c *controller) isExpired(claim *k8ccv1alpha1.DistccClientClaim) bool {
 	return time.Now().After(claim.Status.ExpirationTime.Time)
 }
 
-func newDeploy(claim *k8ccv1alpha1.DistccClientClaim, client *k8ccv1alpha1.DistccClient) *appsv1beta2.Deployment {
+func newDeploy(claim *k8ccv1alpha1.DistccClientClaim, client *k8ccv1alpha1.DistccClient) *appsv1.Deployment {
 	// always one POD per client
 	var replicas int32 = 1
 	labels := getLabelsForUser(client.Labels, claim.Spec.UserName)
@@ -320,7 +320,7 @@ func newDeploy(claim *k8ccv1alpha1.DistccClientClaim, client *k8ccv1alpha1.Distc
 	}
 	template.Labels = labels
 
-	return &appsv1beta2.Deployment{
+	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: fmt.Sprintf("%s-", claim.Name),
 			Namespace:    claim.Namespace,
@@ -333,12 +333,12 @@ func newDeploy(claim *k8ccv1alpha1.DistccClientClaim, client *k8ccv1alpha1.Distc
 			},
 			Labels: labels,
 		},
-		Spec: appsv1beta2.DeploymentSpec{
+		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
 			Selector: getSelectorForUser(client.Spec.Selector, claim.Spec.UserName),
 			Template: *template,
-			Strategy: appsv1beta2.DeploymentStrategy{
-				Type: appsv1beta2.RollingUpdateDeploymentStrategyType,
+			Strategy: appsv1.DeploymentStrategy{
+				Type: appsv1.RollingUpdateDeploymentStrategyType,
 			},
 		},
 	}

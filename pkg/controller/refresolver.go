@@ -8,7 +8,7 @@ import (
 	kubeerr "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
-	appslisters "k8s.io/client-go/listers/apps/v1beta2"
+	appslisters "k8s.io/client-go/listers/apps/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
 
 	k8ccerr "github.com/mbrt/k8cc/pkg/errors"

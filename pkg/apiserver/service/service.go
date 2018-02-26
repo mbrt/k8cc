@@ -31,7 +31,7 @@ var backoff = wait.Backoff{
 	Duration: 5 * time.Millisecond,
 	Factor:   2.0,
 	Jitter:   1.0,
-	Steps:    12,
+	Steps:    11,
 }
 
 // Service is an interface that implements all the APIs.
@@ -189,7 +189,7 @@ func (b *service) renewDistccLease(ctx context.Context, user data.User, distcc *
 		claim, err = b.k8ccclientset.K8ccV1alpha1().DistccClaims(namespace).Create(new)
 	}
 	if err != nil {
-		return k8ccerr.TransientError(errors.Wrap(err, "get/create claim failed"))
+		return k8ccerr.TransientError(errors.Wrap(err, "get/create distcc claim failed"))
 	}
 
 	// Ask for a lease renew if necessary
@@ -226,6 +226,9 @@ func (b *service) renewDistccClientLease(ctx context.Context, user data.User, cl
 		// Create the claim at this point
 		new := newDistccClientClaim(user, client, secretName)
 		claim, err = b.k8ccclientset.K8ccV1alpha1().DistccClientClaims(namespace).Create(new)
+	}
+	if err != nil {
+		return nil, k8ccerr.TransientError(errors.Wrap(err, "get/create client claim failed"))
 	}
 
 	// Ask for a lease renew if necessary

@@ -5,14 +5,14 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	appsv1beta2 "k8s.io/api/apps/v1beta2"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	kubeerr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
-	appslisters "k8s.io/client-go/listers/apps/v1beta2"
+	appslisters "k8s.io/client-go/listers/apps/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 
@@ -52,7 +52,7 @@ type controller struct {
 
 // NewController creates a controller for Distcc using the given shared client connection.
 func NewController(sharedClient *sharedctr.SharedClient) sharedctr.Controller {
-	deployInformer := sharedClient.KubeInformerFactory.Apps().V1beta2().Deployments()
+	deployInformer := sharedClient.KubeInformerFactory.Apps().V1().Deployments()
 	serviceInformer := sharedClient.KubeInformerFactory.Core().V1().Services()
 	distccInformer := sharedClient.DistccInformerFactory.K8cc().V1alpha1().Distccs()
 	claimInformer := sharedClient.DistccInformerFactory.K8cc().V1alpha1().DistccClaims()
@@ -143,7 +143,7 @@ func (c *controller) syncDeployment(distcc *k8ccv1alpha1.Distcc) (distccUpdateSt
 	// If the resource doesn't exist, we'll create it
 	if kubeerr.IsNotFound(err) {
 		new := newDeployment(distcc, nil)
-		deploy, err = c.kubeclientset.AppsV1beta2().Deployments(distcc.Namespace).Create(new)
+		deploy, err = c.kubeclientset.AppsV1().Deployments(distcc.Namespace).Create(new)
 		state.StatefulCreated = true
 	}
 
@@ -173,7 +173,7 @@ func (c *controller) syncDeployment(distcc *k8ccv1alpha1.Distcc) (distccUpdateSt
 	// Update the number of replicas, in case it doesn't match the desired
 	if needScale(distcc, deploy, desiredReplicas) {
 		new := newDeployment(distcc, &desiredReplicas)
-		_, err = c.kubeclientset.AppsV1beta2().Deployments(distcc.Namespace).Update(new)
+		_, err = c.kubeclientset.AppsV1().Deployments(distcc.Namespace).Update(new)
 
 		// If an error occurs during Update, we'll requeue the item so we can
 		// attempt processing again later. This could have been caused by a
@@ -282,8 +282,8 @@ func (c *controller) updateDistccStatus(distcc *k8ccv1alpha1.Distcc, updated dis
 // newDeployment creates a new Deployment for a Distcc resource. It also sets
 // the appropriate OwnerReferences on the resource so handleObject can discover
 // the Deployment resource that 'owns' it. The number of replicas is optional.
-func newDeployment(distcc *k8ccv1alpha1.Distcc, replicas *int32) *appsv1beta2.Deployment {
-	return &appsv1beta2.Deployment{
+func newDeployment(distcc *k8ccv1alpha1.Distcc, replicas *int32) *appsv1.Deployment {
+	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      distcc.Spec.DeploymentName,
 			Namespace: distcc.Namespace,
@@ -296,7 +296,7 @@ func newDeployment(distcc *k8ccv1alpha1.Distcc, replicas *int32) *appsv1beta2.De
 			},
 			Labels: distcc.Labels,
 		},
-		Spec: appsv1beta2.DeploymentSpec{
+		Spec: appsv1.DeploymentSpec{
 			Replicas: replicas,
 			Selector: distcc.Spec.Selector,
 			Template: distcc.Spec.Template,
@@ -332,7 +332,7 @@ func newService(distcc *k8ccv1alpha1.Distcc) *corev1.Service {
 	}
 }
 
-func needScale(distcc *k8ccv1alpha1.Distcc, deploy *appsv1beta2.Deployment, desiredReplicas int32) bool {
+func needScale(distcc *k8ccv1alpha1.Distcc, deploy *appsv1.Deployment, desiredReplicas int32) bool {
 	if deploy.Spec.Replicas == nil {
 		// The replicas are not set
 		return true
