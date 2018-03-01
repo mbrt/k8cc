@@ -1,2 +1,5 @@
-#!bin/bash
-kubectl create secret generic mike-ssh-key --from-file=authorized_keys=${HOME}/.ssh/id_rsa.pub
+#!/bin/bash
+set -e
+
+PUBKEY=${HOME}/.ssh/id_*.pub
+kubectl create secret generic mike-ssh-key --from-file=authorized_keys=${PUBKEY}

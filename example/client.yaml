@@ -5,7 +5,7 @@ metadata:
   labels:
     build-tag: master
 spec:
-  leaseDuration: 1m
+  leaseDuration: 1h
   selector:
     matchLabels:
       build-tag: master
@@ -15,7 +15,7 @@ spec:
         build-tag: master
     spec:
       containers:
-        - name: distcc
+        - name: client
           image: mbrt/distcc-client-ubuntu:latest
           imagePullPolicy: Always
           ports:

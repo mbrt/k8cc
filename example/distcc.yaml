@@ -9,8 +9,8 @@ spec:
   serviceName: distcc-master
   maxReplicas: 10
   userReplicas: 5
-  leaseDuration: 1m
-  downscaleWindow: 2m
+  leaseDuration: 10m
+  downscaleWindow: 15m
   selector:
     matchLabels:
       build-tag: master

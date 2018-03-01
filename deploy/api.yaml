@@ -19,6 +19,7 @@ rules:
 - apiGroups: [""]
   resources:
   - services
+  - secrets
   verbs: ["get"]
 - apiGroups:
   - k8cc.io

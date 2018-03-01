@@ -19,24 +19,32 @@ rules:
 - apiGroups: [""]
   resources:
   - services
-  verbs: ["create", "get", "list"]
+  verbs: ["create", "get", "list", "watch"]
+- apiGroups: [""]
+  resources:
+  - secrets
+  verbs: ["get", "watch"]
+- apiGroups: [""]
+  resources:
+  - events
+  verbs: ["create", "patch"]
 - apiGroups:
   - apps
   resources:
   - deployments
-  verbs: ["create", "get", "list"]
+  verbs: ["create", "get", "list", "update", "watch"]
 - apiGroups:
   - k8cc.io
   resources:
   - distccs
   - distccclients
-  verbs: ["get", "list", "update"]
+  verbs: ["get", "list", "update", "watch"]
 - apiGroups:
   - k8cc.io
   resources:
   - distccclaims
   - distccclientclaims
-  verbs: ["delete", "get", "list", "update"]
+  verbs: ["delete", "get", "list", "update", "watch"]
 ---
 apiVersion: v1
 kind: ServiceAccount

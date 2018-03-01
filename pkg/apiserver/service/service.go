@@ -31,7 +31,7 @@ var backoff = wait.Backoff{
 	Duration: 5 * time.Millisecond,
 	Factor:   2.0,
 	Jitter:   1.0,
-	Steps:    11,
+	Steps:    12,
 }
 
 // Service is an interface that implements all the APIs.
