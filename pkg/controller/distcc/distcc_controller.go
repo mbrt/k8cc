@@ -326,8 +326,8 @@ func newService(distcc *k8ccv1alpha1.Distcc) *corev1.Service {
 			Ports: []corev1.ServicePort{
 				{Port: DistccPort},
 			},
-			Selector:  selector,
-			ClusterIP: "None",
+			Selector: selector,
+			Type:     corev1.ServiceTypeClusterIP,
 		},
 	}
 }
