@@ -36,6 +36,8 @@ func newController(objects ...runtime.Object) *controllerTest {
 	distccInformerFactory := informers.NewSharedInformerFactory(k8ccclientset, 0)
 	claimInformer := distccInformerFactory.K8cc().V1alpha1().DistccClaims()
 	distccInformer := distccInformerFactory.K8cc().V1alpha1().Distccs()
+	// Make test deterministic, avoiding time.Now()
+	now, _ := time.Parse("2006/01/02 15:04", "2018/03/08 17:00")
 
 	ctrl := &controllerTest{
 		&controller{
@@ -45,7 +47,7 @@ func newController(objects ...runtime.Object) *controllerTest {
 			claimsLister:  claimInformer.Lister(),
 		},
 		distccInformerFactory,
-		time.Now(),
+		now,
 	}
 	ctrl.controller.now = func() time.Time { return ctrl.Now() }
 	return ctrl
