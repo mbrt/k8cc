@@ -29,12 +29,19 @@ const (
 
 const controllerAgentName = "k8cc-distcc-claim-controller"
 
+// nowFunc returns the current time
+type nowFunc func() time.Time
+
+var defaultNow nowFunc = func() time.Time { return time.Now() }
+
 // controller controls DistccClaim objects
 type controller struct {
 	kubeclientset kubernetes.Interface
 	k8ccclientset clientset.Interface
 	distccsLister listers.DistccLister
 	claimsLister  listers.DistccClaimLister
+	// Allows to be mocked away
+	now nowFunc
 }
 
 // NewController creates a controller for DistccClaims using the given shared client connection.
@@ -47,6 +54,7 @@ func NewController(sharedClient *sharedctr.SharedClient) sharedctr.Controller {
 		k8ccclientset: sharedClient.K8ccClientset,
 		distccsLister: distccInformer.Lister(),
 		claimsLister:  claimInformer.Lister(),
+		now:           defaultNow,
 	}
 
 	return kit.NewController(
@@ -90,7 +98,7 @@ func (c *controller) Sync(object runtime.Object) (bool, error) {
 		})
 	}
 
-	// Check that the distcc labels match, otherwise it will be impossible for the distcc
+	// Check that the distcc labels matches, otherwise it will be impossible for the distcc
 	// controller to take this claim into account
 	if !labels.Set(distcc.Labels).AsSelector().Matches(labels.Set(claim.Labels)) {
 		msg := fmt.Sprintf("metadata.Labels cannot be matched by the referenced Distcc %s",
@@ -141,8 +149,7 @@ func (c *controller) NeedPeriodicSync() bool {
 }
 
 func (c *controller) updateExpiration(claim *k8ccv1alpha1.DistccClaim, distcc *k8ccv1alpha1.Distcc) bool {
-	now := time.Now()
-	maxExpiration := now.Add(distcc.Spec.LeaseDuration.Duration)
+	maxExpiration := c.now().Add(distcc.Spec.LeaseDuration.Duration)
 	// If expiration is not set, set it automatically
 	// If the expiration exceedes the maximum possible one (namely now + expiration time)
 	// then reduce it to that value
@@ -154,5 +161,5 @@ func (c *controller) updateExpiration(claim *k8ccv1alpha1.DistccClaim, distcc *k
 }
 
 func (c *controller) isExpired(claim *k8ccv1alpha1.DistccClaim) bool {
-	return time.Now().After(claim.Status.ExpirationTime.Time)
+	return c.now().After(claim.Status.ExpirationTime.Time)
 }
