@@ -26,6 +26,10 @@ import (
 )
 
 const (
+	// ErrDeployNotSpecified is used as part of the Event 'reason' when a
+	// Distcc fails to sync due to a missing Deployment reference specified
+	ErrDeployNotSpecified = "ErrDeployNotSpecified"
+
 	// ErrResourceExists is used as part of the Event 'reason' when a Distcc fails
 	// to sync due to a Deployment of the same name already existing.
 	ErrResourceExists = "ErrResourceExists"
@@ -40,6 +44,11 @@ const (
 
 const controllerAgentName = "k8cc-distcc-controller"
 
+// nowFunc returns the current time
+type nowFunc func() time.Time
+
+var defaultNow nowFunc = func() time.Time { return time.Now() }
+
 // controller controls Distcc objects
 type controller struct {
 	kubeclientset kubernetes.Interface
@@ -48,6 +57,8 @@ type controller struct {
 	serviceLister corelisters.ServiceLister
 	distccsLister listers.DistccLister
 	claimsLister  listers.DistccClaimLister
+	// Allows to be mocked away
+	now nowFunc
 }
 
 // NewController creates a controller for Distcc using the given shared client connection.
@@ -135,7 +146,12 @@ func (c *controller) syncDeployment(distcc *k8ccv1alpha1.Distcc) (distccUpdateSt
 		// We choose to absorb the error here as the worker would requeue the
 		// resource otherwise. Instead, the next time the resource is updated
 		// the resource will be queued again.
-		return state, errors.Errorf("%s: deployment name must be specified", deployName)
+		msg := "spec.deploymentName name must be specified"
+		return state, kit.EventfulError(errors.New(msg), kit.Event{
+			Type:    corev1.EventTypeWarning,
+			Reason:  ErrDeployNotSpecified,
+			Message: msg,
+		})
 	}
 
 	// Get the deploy with the name specified in Distcc.Spec
@@ -171,7 +187,7 @@ func (c *controller) syncDeployment(distcc *k8ccv1alpha1.Distcc) (distccUpdateSt
 		return state, errors.Wrap(err, "cannot determine desired replicas for distcc")
 	}
 	// Update the number of replicas, in case it doesn't match the desired
-	if needScale(distcc, deploy, desiredReplicas) {
+	if needScale(c.now(), distcc, deploy, desiredReplicas) {
 		new := newDeployment(distcc, &desiredReplicas)
 		_, err = c.kubeclientset.AppsV1().Deployments(distcc.Namespace).Update(new)
 
@@ -189,7 +205,7 @@ func (c *controller) syncDeployment(distcc *k8ccv1alpha1.Distcc) (distccUpdateSt
 
 func (c *controller) desiredReplicas(distcc *k8ccv1alpha1.Distcc) (int32, error) {
 	// Get all the matching DistccClaims and give them replicas if they are not expired
-	now := time.Now()
+	now := c.now()
 	maxExpiration := now.Add(distcc.Spec.LeaseDuration.Duration)
 	selector, err := metav1.LabelSelectorAsSelector(distcc.Spec.Selector)
 	if err != nil {
@@ -270,7 +286,7 @@ func (c *controller) updateDistccStatus(distcc *k8ccv1alpha1.Distcc, updated dis
 	// You can use DeepCopy() to make a deep copy of original object and modify this copy
 	// Or create a copy manually for better performance
 	distccCopy := distcc.DeepCopy()
-	now := conv.ToKubeTime(time.Now())
+	now := conv.ToKubeTime(c.now())
 	distccCopy.Status.LastUpdateTime = now
 	if updated.StatefulScaled {
 		distccCopy.Status.LastScaleTime = now
@@ -332,7 +348,7 @@ func newService(distcc *k8ccv1alpha1.Distcc) *corev1.Service {
 	}
 }
 
-func needScale(distcc *k8ccv1alpha1.Distcc, deploy *appsv1.Deployment, desiredReplicas int32) bool {
+func needScale(now time.Time, distcc *k8ccv1alpha1.Distcc, deploy *appsv1.Deployment, desiredReplicas int32) bool {
 	if deploy.Spec.Replicas == nil {
 		// The replicas are not set
 		return true
@@ -353,7 +369,7 @@ func needScale(distcc *k8ccv1alpha1.Distcc, deploy *appsv1.Deployment, desiredRe
 		return true
 	}
 	nextAllowedTime := distcc.Status.LastScaleTime.Add(distcc.Spec.DownscaleWindow.Duration)
-	return time.Now().After(nextAllowedTime)
+	return now.After(nextAllowedTime)
 }
 
 type distccUpdateState struct {
