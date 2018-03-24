@@ -75,6 +75,7 @@ func NewController(sharedClient *sharedctr.SharedClient) sharedctr.Controller {
 		serviceLister: serviceInformer.Lister(),
 		distccsLister: distccInformer.Lister(),
 		claimsLister:  claimInformer.Lister(),
+		now:           defaultNow,
 	}
 
 	return kit.NewController(
