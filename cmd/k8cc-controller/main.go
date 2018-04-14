@@ -31,7 +31,7 @@ func main() {
 	controllers := []controller.Controller{
 		distcc.NewController(sharedClient),
 		distccclaim.NewController(sharedClient),
-		distccclient.NewController(sharedClient),
+		distccclientclaim.NewController(sharedClient),
 	}
 
 	errs := make(chan error, 1)

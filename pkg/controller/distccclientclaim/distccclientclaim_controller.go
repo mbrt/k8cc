@@ -1,4 +1,4 @@
-package distccclient
+package distccclientclaim
 
 import (
 	"fmt"
@@ -27,9 +27,13 @@ import (
 	k8ccerr "github.com/mbrt/k8cc/pkg/errors"
 )
 
-const controllerAgentName = "k8cc-distcc-client-controller"
-
 const (
+	// ErrClientNotSpecified is used as part of the Event 'reason' when a
+	// DistccClientClaim fails to sync due to a missing DistccClient reference specified
+	ErrClientNotSpecified = "ErrClientNotSpecified"
+	// ErrClientRefInvalid is used as part of the Event 'reason' when a
+	// DistccClientClaim fails to sync due to an invalid DistccClient reference
+	ErrClientRefInvalid = "ErrClientRefInvalid"
 	// ErrResourceExists is used as part of the Event 'reason' when a Distcc fails
 	// to sync due to a Deployment of the same name already existing.
 	ErrResourceExists = "ErrResourceExists"
@@ -48,6 +52,13 @@ const (
 	SSHPort = 22
 )
 
+const controllerAgentName = "k8cc-distcc-client-controller"
+
+// nowFunc returns the current time
+type nowFunc func() time.Time
+
+var defaultNow nowFunc = func() time.Time { return time.Now() }
+
 // NewController creates a new Controller
 func NewController(sharedClient *sharedctr.SharedClient) sharedctr.Controller {
 	deployInformer := sharedClient.KubeInformerFactory.Apps().V1().Deployments()
@@ -62,6 +73,7 @@ func NewController(sharedClient *sharedctr.SharedClient) sharedctr.Controller {
 		servicesLister:      serviceInformer.Lister(),
 		distccclientsLister: clientInformer.Lister(),
 		distccclaimsLister:  claimInformer.Lister(),
+		now:                 defaultNow,
 	}
 
 	return kit.NewController(
@@ -83,6 +95,8 @@ type controller struct {
 	servicesLister      corelisters.ServiceLister
 	distccclientsLister listers.DistccClientLister
 	distccclaimsLister  listers.DistccClientClaimLister
+	// Allows to be mocked away
+	now nowFunc
 }
 
 func (c *controller) AgentName() string {
@@ -93,13 +107,29 @@ func (c *controller) Sync(object runtime.Object) (bool, error) {
 	claim := object.(*k8ccv1alpha1.DistccClientClaim)
 	namespace := claim.Namespace
 	name := claim.Name
+	clientName := claim.Spec.DistccClientName
+	if clientName == "" {
+		// We choose to absorb the error here as the worker would requeue the
+		// resource otherwise. Instead, the next time the resource is updated
+		// the resource will be queued again.
+		msg := "spec.distccClientName must be specified"
+		return false, kit.EventfulError(errors.New(msg), kit.Event{
+			Type:    corev1.EventTypeWarning,
+			Reason:  ErrClientNotSpecified,
+			Message: msg,
+		})
+	}
 
 	// Get the corresponding DistccClient resource
 	dclient, err := c.distccclientsLister.DistccClients(namespace).Get(claim.Spec.DistccClientName)
 	if err != nil {
 		if kubeerr.IsNotFound(err) {
-			// The referring DistccClient is invalid, stop processing this element
-			return false, errors.Errorf("distccclient '%s' is not present", claim.Spec.DistccClientName)
+			msg := "spec.distccClientName points to a non existing object"
+			return false, kit.EventfulError(errors.New(msg), kit.Event{
+				Type:    corev1.EventTypeWarning,
+				Reason:  ErrClientRefInvalid,
+				Message: msg,
+			})
 		}
 		return false, k8ccerr.TransientError(err)
 	}
@@ -285,7 +315,7 @@ func (c *controller) syncService(claim *k8ccv1alpha1.DistccClientClaim, client *
 }
 
 func (c *controller) updateExpiration(claim *k8ccv1alpha1.DistccClientClaim, client *k8ccv1alpha1.DistccClient) bool {
-	now := time.Now()
+	now := c.now()
 	maxExpiration := now.Add(client.Spec.LeaseDuration.Duration)
 	// If expiration is not set, set it automatically
 	// If the expiration exceedes the maximum possible one (namely now + expiration time)
@@ -298,14 +328,14 @@ func (c *controller) updateExpiration(claim *k8ccv1alpha1.DistccClientClaim, cli
 }
 
 func (c *controller) isExpired(claim *k8ccv1alpha1.DistccClientClaim) bool {
-	return time.Now().After(claim.Status.ExpirationTime.Time)
+	return c.now().After(claim.Status.ExpirationTime.Time)
 }
 
 func newDeploy(claim *k8ccv1alpha1.DistccClientClaim, client *k8ccv1alpha1.DistccClient) *appsv1.Deployment {
-	// always one POD per client
+	// Always one POD per client
 	var replicas int32 = 1
 	labels := getLabelsForUser(client.Labels, claim.Spec.UserName)
-	// update the template with
+	// Update the template with
 	// - the required secrets
 	// - the labels coming from the claim
 	template := client.Spec.Template.DeepCopy()

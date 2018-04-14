@@ -46,6 +46,7 @@ func newController(objects ...runtime.Object) *controllerTest {
 	k8ccclientset := fakeclient.NewSimpleClientset(objects...)
 	distccInformerFactory := informers.NewSharedInformerFactory(k8ccclientset, 0)
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeclientset, 0)
+
 	deployInformer := kubeInformerFactory.Apps().V1().Deployments()
 	serviceInformer := kubeInformerFactory.Core().V1().Services()
 	claimInformer := distccInformerFactory.K8cc().V1alpha1().DistccClaims()
